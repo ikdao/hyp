@@ -1,3 +1,4 @@
+
 // ===== PART 1: h() - Hyperscript (Virtual DOM Creation) =====
 const h = function (ty, prp, ...chd) {
     if (prp === null || prp === undefined) {
@@ -153,3 +154,7 @@ const r = function (vnode, container) {
 
     return dom;
 };
+
+const HYP = { h, r };
+window.HYP = HYP;
+export default HYP;
