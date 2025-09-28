@@ -1,160 +1,88 @@
 
-// ===== PART 1: h() - Hyperscript (Virtual DOM Creation) =====
-const h = function (ty, prp, ...chd) {
-    if (prp === null || prp === undefined) {
-        prp = {};
-    }
+// ===== HYP Core =====
+// Adding state, and diff runner
 
-    if (prp && (
-        typeof prp === 'string' ||
-        typeof prp === 'number' ||
-        typeof prp === 'boolean' ||
-        Array.isArray(prp) ||
-        (typeof prp === 'object' && (prp.ty || prp.$typeof))
-    )) {
-        chd.unshift(prp);
-        prp = {};
-    }
-
+// Define vNode h()
+export const h = (ty, prp, ...chd) => {
+    if (!prp) prp = {};
+    if (prp && (typeof prp !== 'object' || prp.ty)) { chd.unshift(prp); prp = {}; }
     const flatChildren = [];
-    const flattenChildren = (arr) => {
-        for (let i = 0; i < arr.length; i++) {
-            const child = arr[i];
-            if (child === null || child === undefined || child === false) {
-                continue;
-            }
-            if (Array.isArray(child)) {
-                flattenChildren(child);
-            } else {
-                flatChildren.push(child);
-            }
-        }
-    };
-    flattenChildren(chd);
-
+    const flatten = arr => arr.forEach(c => {
+        if (c == null || c === false) return;
+        if (Array.isArray(c)) flatten(c); else flatChildren.push(c);
+    });
+    flatten(chd);
+    return { ty, prp, chd: flatChildren, key: prp.key || null, ref: prp.ref || null };
+};
+// State and Signal
+export const s = initial => {
+    let value = initial;
+    const subs = new Set();
     return {
-        ty,
-        prp: prp || {},
-        chd: flatChildren,
-        key: prp?.key || null,
-        ref: prp?.ref || null
+        get: () => value,
+        set: next => {
+            if (next !== value) {
+                value = next;
+                subs.forEach(fn => fn(value));
+            }
+        },
+        subscribe: fn => { subs.add(fn); fn(value); return () => subs.delete(fn); }
     };
 };
 
-// ===== PART 2: r() - Run (Render Virtual DOM to Real DOM) =====
-const r = function (vnode, container) {
-    const setProp = (element, key, value) => {
-        if (key === 'key' || key === 'ref') {
-            return;
+// ===== Deploy vNode with Diffing Runner =====
+let prevVNode = null;
+export const r = (vnode, container) => {
+    const setProp = (el, key, val) => {
+        if (key === 'key' || key === 'ref') return;
+        if (key.startsWith('on') && typeof val === 'function')
+            el.addEventListener(key.slice(2).toLowerCase(), val);
+        else if (key === 'className' || key === 'class') el.className = val || '';
+        else if (key === 'style') {
+            if (typeof val === 'string') el.style.cssText = val;
+            else if (val) Object.assign(el.style, val);
         }
-
-        if (key.startsWith('on') && typeof value === 'function') {
-            const eventName = key.slice(2).toLowerCase();
-            element.addEventListener(eventName, value);
-        } else if (key === 'className' || key === 'class') {
-            if (value) element.className = value;
-        } else if (key === 'style') {
-            if (typeof value === 'string') {
-                element.style.cssText = value;
-            } else if (value && typeof value === 'object') {
-                Object.assign(element.style, value);
-            }
-        } else if (key === 'dangerouslySetInnerHTML') {
-            if (value && value.__html) {
-                element.innerHTML = value.__html;
-            }
-        } else if (key in element && key !== 'list') {
-            try {
-                element[key] = value;
-            } catch (e) {
-                if (value !== false && value != null) {
-                    element.setAttribute(key, value);
-                }
-            }
-        } else {
-            if (value === false || value == null) {
-                element.removeAttribute(key);
-            } else if (value === true) {
-                element.setAttribute(key, '');
-            } else {
-                element.setAttribute(key, String(value));
-            }
-        }
+        else if (key in el && key !== 'list') { try { el[key] = val; } catch { if (val != null) el.setAttribute(key, val); } }
+        else { val == null || val === false ? el.removeAttribute(key) : el.setAttribute(key, val === true ? '' : val); }
     };
-    const createDOM = (vnode) => {
-        // Handle primitive values (string, number, etc.)
-        if (typeof vnode !== 'object' || vnode === null) {
-            return document.createTextNode(String(vnode));
-        }
 
-        // Handle arrays (DocumentFragment)
-        if (Array.isArray(vnode)) {
-            const fragment = document.createDocumentFragment();
-            vnode.forEach(child => {
-                if (child != null) {
-                    fragment.appendChild(createDOM(child));
-                }
-            });
-            return fragment;
-        }
-
-        // Destructure vnode
+    const createDOM = vnode => {
+        if (typeof vnode !== 'object' || vnode == null) return document.createTextNode(String(vnode));
+        if (Array.isArray(vnode)) { const frag = document.createDocumentFragment(); vnode.forEach(c => c != null && frag.appendChild(createDOM(c))); return frag; }
         const { ty, prp, chd, ref } = vnode;
-
-        // Handle functional components
-        if (typeof ty === "function") {
-            return createDOM(ty({ ...prp, chd }));
-        }
-
-        // Handle DOM elements
-        const element = document.createElement(ty);
-
-        // Apply prp
-        if (prp) {
-            for (const key in prp) {
-                setProp(element, key, prp[key]);
-            }
-        }
-
-        // Handle refs
-        if (ref) {
-            if (typeof ref === 'function') {
-                ref(element);
-            } else if (ref && typeof ref === 'object') {
-                ref.current = element;
-            }
-        }
-
-        // Append chd
-        if (chd && chd.length > 0) {
-            if (chd.length > 3) {
-                const fragment = document.createDocumentFragment();
-                chd.forEach(child => {
-                    if (child != null) {
-                        fragment.appendChild(createDOM(child));
-                    }
-                });
-                element.appendChild(fragment);
-            } else {
-                chd.forEach(child => {
-                    if (child != null) {
-                        element.appendChild(createDOM(child));
-                    }
-                });
-            }
-        }
-
-        return element;
+        if (typeof ty === 'function' && ty._hypComponent) return createDOM(ty._render(prp, chd));
+        if (typeof ty === 'function') return createDOM(ty({ ...prp, chd }));
+        const el = document.createElement(ty);
+        if (prp) Object.keys(prp).forEach(k => setProp(el, k, prp[k]));
+        if (ref) typeof ref === 'function' ? ref(el) : ref.current = el;
+        chd?.forEach(c => el.appendChild(createDOM(c)));
+        return el;
     };
 
+    const patch = (dom, oldV, newV) => {
+        if (typeof oldV !== 'object' || oldV == null || typeof newV !== 'object' || newV == null) {
+            if (oldV !== newV) { const newDom = createDOM(newV); dom.replaceWith(newDom); return newDom; }
+            return dom;
+        }
+        if (oldV.ty !== newV.ty) { const newDom = createDOM(newV); dom.replaceWith(newDom); return newDom; }
+        Object.keys(oldV.prp || {}).forEach(k => !(k in newV.prp) && setProp(dom, k, null));
+        Object.keys(newV.prp || {}).forEach(k => oldV.prp[k] !== newV.prp[k] && setProp(dom, k, newV.prp[k]));
+        const max = Math.max(oldV.chd.length, newV.chd.length);
+        for (let i = 0; i < max; i++) {
+            const oldC = oldV.chd[i], newC = newV.chd[i];
+            const domChild = dom.childNodes[i];
+            if (!oldC && newC) dom.appendChild(createDOM(newC));
+            else if (!newC && oldC) dom.removeChild(domChild);
+            else if (oldC && newC) patch(domChild, oldC, newC);
+        }
+        return dom;
+    };
 
-    container.textContent = '';
-    const dom = createDOM(vnode);
-    container.appendChild(dom);
-
-    return dom;
+    if (!prevVNode) { container.textContent=''; container.appendChild(createDOM(vnode)); }
+    else patch(container.firstChild, prevVNode, vnode);
+    prevVNode = vnode;
 };
 
-const HYP = { h, r };
+const HYP = { h, r, s };
 window.HYP = HYP;
 export default HYP;
