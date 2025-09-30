@@ -1,56 +1,111 @@
-# hyp - 
-Hyp - A Indie Indic UI Framework from ikdao
+Hyp UI Framework
+================
 
-soon update with new architecture and security patches
+**Hyp** (by [ikdao](https://ikdao.org)) is an **Indie Indic UI Framework** built to experiment with minimal functional UI design patterns, inspired by hyperscript, reactive state, and virtual DOM execution.
 
-## Essentials
+*   **Lightweight**: Pure JS, minimal abstractions.
+    
+*   **Reactive**: Built-in state, derived state, and side-effects.
+    
+*   **Composable**: Functions are the building blocks.
+    
+*   **Experimental**: Targets SPA, SVG, AR/VR, and beyond.
+    
 
-h() to code functional vDom
-e() to execute/evaluate vDom
+Essentials
+----------
 
-## Neccesaries
+### h() — Hyperscript
 
-### orchestrater
-organiser o() for spatial mapping
+The h() function creates a **virtual DOM node (VNode)**.
 
-scheduler s() for temporal setting
+Plain text
+`   import { h } from "hyp";  const vnode = h("div", { class: "box" }, "Hello Hyp");   `
 
-### directors
-actor a() - state management
+*   ty → element type (string tag or component function)
+    
+*   prp → props (attributes, events, class, style, etc.)
+    
+*   chd → children (string, number, VNode, or array)
+    
 
-derive act dA() - derived state management
+### e() — Executor
 
-side act sA() - side state management
+The e() function renders or updates the VDOM into the real DOM.
 
-## Future possibilities 
+Plain text
+`   import { h, e } from "hyp";  const App = () => h("h1", null, "Hello World");  e(h(App), document.getElementById("root"));   `
 
-future upgrade neccesary for full fledged SPA UI framework
+Handles:
 
-- custom class modules(m) extensible components
+*   Mounting / unmounting components
+    
+*   Props & event binding
+    
+*   Child diffing (keyed + index-based)
+    
+*   SVG namespace support
+    
 
-- navigator(n) special purpose actor that route/navigate
+Necessaries
+-----------
 
-- hX handle xr AR/VR modules, with optimizations
+These are the **core reactive orchestration primitives**.
 
-- eX execute XR AR/VR modules, with optimizations
+### Orchestrater
 
+*   **o (Organiser)** → spatial mapping context (per component instance)
+    
+*   **s (Scheduler)** → async microtask queue for updates
+    
 
-just last of iterations added SVG support for common general purpose executor that means it will run/render 3D and vector shapes.
+### Directors
 
-## support dev and team
+*   const counter = a(0);console.log(counter.get()); // 0counter.set(1);
+    
+*   const double = dA(() => counter.get() \* 2);
+    
+*   sA(() => { console.log("Counter updated:", counter.get());}, () => \[counter.get()\]);
+    
 
-hemangtewari@upi
+Future Possibilities
+--------------------
 
-eth:0x43ffd7C1Ea8AAfdc768c0883F35b2AE433EE4726
+The roadmap includes evolving Hyp into a **full SPA framework**:
 
-btc:bc1qgk84f0dfddqfcww58ftse832udksf2wslnd3cd
+*   **m()** → custom class modules / extensible components
+    
+*   **n()** → navigator actor for routing
+    
+*   **hX() / eX()** → AR/VR (XR) support
+    
+*   **SVG rendering** → already supported in e()
+    
 
-sol:DQr1t5uSriiwdu1NwTigJdbNg6WVHSFHijmyHFV27VC1
+Example Counter App
+-------------------
 
-doge:DLjkz6u5byBzX6Dd68hJVTmxTWeiTZt7em
+Plain text
+`   import HYP from "hyp";  const { h, e, a, sA } = HYP;  const Counter = () => {    const count = a(0);    return h("div", { class: "counter" },      h("h1", null, () => "Count: " + count.get()),      h("button", { onClick: () => count.set(count.get() + 1) }, "+"),      h("button", { onClick: () => count.set(count.get() - 1) }, "-")    );  };  e(h(Counter), document.getElementById("root"));   `
 
+Support Development
+-------------------
 
-## open source and licensed under
+*   **UPI**: hemangtewari@upi
+    
+*   **ETH**: 0x43ffd7C1Ea8AAfdc768c0883F35b2AE433EE4726
+    
+*   **BTC**: bc1qgk84f0dfddqfcww58ftse832udksf2wslnd3cd
+    
+*   **SOL**: DQr1t5uSriiwdu1NwTigJdbNg6WVHSFHijmyHFV27VC1
+    
+*   **DOGE**: DLjkz6u5byBzX6Dd68hJVTmxTWeiTZt7em
+    
 
-Zero One One Self License - 011sl
-https://legal.ikdao.org/license/011sl
+License
+-------
+
+**Open Source** under [Zero One One Self License - 011sl](https://legal.ikdao.org/license/011sl)
+
+Plain text
+`   Hyp UI Framework - Hemang Tewari  License: 011sl   `
