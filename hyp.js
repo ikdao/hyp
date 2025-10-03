@@ -1,10 +1,11 @@
-// ===== HYP Core =====
+//  HYP FRAMEWORK CORE v0.11.11
 // Zero One One License - 011sl
 // https://legal/ikdao.org/license/011sl
 // Hyp UI Framework - [Hemang Tewari]
 
-//  HYP FRAMEWORK CORE v0.1.1
-// --- 1. Hyperscript ---
+// ===== HYP Core =====
+
+// --- 1. Hyperscript h() ---
 export const h = (ty, prp, ...chd) => {
   if (!prp) prp = {};
   if (prp && (typeof prp !== 'object' || prp.ty)) {
@@ -26,95 +27,14 @@ export const h = (ty, prp, ...chd) => {
         flatChildren.push(c);
         return;
       }
-      // Otherwise skip silently (avoid injecting functions, plain objects, symbols, etc.)
-      // Optionally you could warn in dev builds:
-      // if (process.env.NODE_ENV !== 'production') console.warn('Ignored invalid child in h():', c);
     });
   };
   flatten(chd);
   return{ ty, prp, chd: flatChildren, key: prp.key || null, ref: prp.ref || null};
 };
 
-// --- Class Modules
-export const c = (base = Object, def) => {
-  return class Module extends base {
-    constructor(props) {
-      super(props);
 
-      this.props = props || {};
-      this.state = def.state ? def.state() : {};
-      this.render = def.render.bind(this);
-
-      this.effects = [];
-      this.cleanups = [];
-
-      if (typeof def.setup === "function") {
-        def.setup.call(this, props);
-      }
-
-      if (typeof this.componentWillMount === "function") {
-        this.componentWillMount();
-      }
-    }
-
-    setState(partial) {
-      this.state = { ...this.state, ...partial };
-      s.add(() => this.update());
-    }
-
-    mount(container) {
-      if (typeof this.componentDidMount === "function") {
-        s.add(() => this.componentDidMount());
-      }
-      const vnode = this.render(this.props, this.state, this.props.children);
-      this._vnode = vnode;
-      return vnode;
-    }
-
-    update() {
-      if (typeof this.componentDidUpdate === "function") {
-        this.componentDidUpdate(this.props, this.state);
-      }
-      const newVNode = this.render(this.props, this.state, this.props.children);
-      this._vnode = newVNode;
-      return newVNode;
-    }
-
-    onMount(fn) { this.effects.push(fn); }
-    runEffects() { this.effects.forEach(fn => fn()); }
-
-    onUnmount(fn) { this.cleanups.push(fn); }
-    cleanup() {
-      if (typeof this.componentWillUnmount === "function") {
-        this.componentWillUnmount();
-      }
-      this.cleanups.forEach(fn => fn());
-    }
-  };
-};
-
-
-// --- 1. Scheduler (s) ---
-export const s = (function() {
-  const pe = new Set();
-  let fR = false;
-  function ru() {
-    pe.forEach(fn => fn());
-    pe.clear();
-    fR = false;
-  }
-  return {
-    add(fn) {
-      pe.add(fn);
-      if (!fR) {
-queueMicrotask(ru);
-        fR = true;
-      }
-    }
-  };
-})();
-
-// --- Organiser (o)---
+// --- 2. Organiser (o)---
 export const o = new Map();
 let oID_counter = 0;
 let oID = null;
@@ -124,64 +44,86 @@ function gCI() {
   if (oID === null) throw new Error("Organiser Hooks must be inside component.");
   return oID;
 };
-// --- 2. Actor (a) ---
-export const a = initial => {
-  let value = initial;
-  const subs = new Set();
+
+
+// 3. Scheduler s()
+export const s = (function() {
+  const mainQueue = new Set();   // DOM-safe tasks
+  const workerQueue = [];        // heavy tasks
+  const maxWorkers = 4;
+  const workers = [];
+  let running = false;
+
+  // --- Run main thread tasks ---
+  function runMain() {
+    mainQueue.forEach(fn => {
+      try { fn(); } catch(e){ console.error("Main-thread task error:", e); }
+    });
+    mainQueue.clear();
+    running = false;
+  }
+
+  // --- Worker execution ---
+  function runNextWorker() {
+    if (!workerQueue.length) return;
+    const task = workerQueue.shift();
+    const w = getWorker();
+    if (!w) {
+      // fallback to main thread
+      try { task(); } catch(e){ console.error("Worker fallback task error:", e); }
+      runNextWorker();
+      return;
+    }
+    const workerObj = workers.find(wk => wk.worker === w);
+    workerObj.busy = true;
+    w.postMessage(task.toString());
+  }
+
+  function getWorker() {
+    if (workers.length < maxWorkers) {
+      const w = new Worker(URL.createObjectURL(
+        new Blob([`
+          onmessage = e => {
+            try {
+              postMessage(eval('(' + e.data + ')()'));
+            } catch(err) {
+              postMessage({ error: err.toString() });
+            }
+          };
+        `], { type: 'text/javascript' })
+      ));
+      w.onmessage = () => {
+        const obj = workers.find(wk => wk.worker === w);
+        obj.busy = false;
+        runNextWorker();
+      };
+      workers.push({ worker: w, busy: false });
+      return w;
+    }
+    const idle = workers.find(wk => !wk.busy);
+    return idle?.worker || null;
+  }
+
   return {
-    get: () => { if (tr) subs.add(tr); return value; },
-    set: next => {
-      if (next !== value) {
-        value = next;
-        subs.forEach(fn => s.add(fn));
-    s.add(rF); 
+    // DOM-safe tasks
+    add(fn) {
+      mainQueue.add(fn);
+      if (!running) {
+        running = true;
+        queueMicrotask(runMain);
       }
     },
-    subscribe: fn => { subs.add(fn); return () => subs.delete(fn); }
-  };
-};
-// --- Derive Act (dA) ---
-export const dA = (fn) => {
-  const iD = gCI();
-  const inC = o.get(iD);
-  const hoK = 'dA-' + inC.ei++;
-  if (!inC.hk.has(hoK)) {
-    const si = a(undefined);
-    const recompute = () => {
-      tr = recompute;
-      const newValue = fn();
-      tr = null;
-      if (newValue !== si.get()) si.set(newValue);
-    };
-    recompute();
-    inC.hk.set(hoK, si);
-  }
-  return inC.hk.get(hoK);
-};
 
-// --- Side Act (sA) ---
-export const sA = (fn, depsFn = null) => {
-  const iD = gCI();
-  const inC = o.get(iD);
-  const hoK = 'sA-' + inC.ei++;
-  const runSide = () => {
-    tr = runSide;
-    const depsVal = depsFn ? depsFn() : null;
-    tr = null;
-    const prev = inC.hk.get(hoK) || {};
-    const prevDeps = prev.deps;
-    const depsChanged = !depsFn ||
-      !prevDeps ||
-      depsVal.length !== prevDeps.length ||
-      depsVal.some((v, i) => v !== prevDeps[i]);
-    if (depsChanged) {
-      if (typeof prev.cleanup === 'function') prev.cleanup();
-      const cleanup = fn();         // run effect and optionally get cleanup
-      inC.hk.set(hoK, { deps: depsVal, cleanup });
+    // heavy async tasks
+    addWorkerTask(fn) {
+      workerQueue.push(fn);
+      if (!running) {
+        running = true;
+        queueMicrotask(runMain);
+      }
     }
   };
-  s.add(runSide);
-};
+})();
 
 // --- 4. Executor (e) ---
 let prevVNode = null;
@@ -260,7 +202,6 @@ export const e = (vnode, container) => {
     }
     const { ty, prp, chd, ref } = vnode;
 
-    // --- Modules ---
     if (ty.prototype && ty.prototype.render) {
       if (!vnode.inst) {
         vnode.inst = new ty(prp || {});
@@ -406,7 +347,124 @@ export const e = (vnode, container) => {
   prevVNode = vnode;
 };
 
+// Reactive Actors/States
 
-const HYP = {h,e,a,sA,dA,c,o,s};
+// --- 5. Actor (a) ---
+export const a = initial => {
+  let value = initial;
+  const subs = new Set();
+  return {
+    get: () => { if (tr) subs.add(tr); return value; },
+    set: next => {
+      if (next !== value) {
+        value = next;
+        subs.forEach(fn => s.add(fn));
+    s.add(rF); 
+      }
+    },
+    subscribe: fn => { subs.add(fn); return () => subs.delete(fn); }
+  };
+};
+// --- 6. Derive Act (dA) ---
+export const dA = (fn) => {
+  const iD = gCI();
+  const inC = o.get(iD);
+  const hoK = 'dA-' + inC.ei++;
+  if (!inC.hk.has(hoK)) {
+    const si = a(undefined);
+    const recompute = () => {
+      tr = recompute;
+      const newValue = fn();
+      tr = null;
+      if (newValue !== si.get()) si.set(newValue);
+    };
+    recompute();
+    inC.hk.set(hoK, si);
+  }
+  return inC.hk.get(hoK);
+};
+
+// --- 7. Side Act (sA) ---
+export const sA = (fn, depsFn = null) => {
+  const iD = gCI();
+  const inC = o.get(iD);
+  const hoK = 'sA-' + inC.ei++;
+  const runSide = () => {
+    tr = runSide;
+    const depsVal = depsFn ? depsFn() : null;
+    tr = null;
+    const prev = inC.hk.get(hoK) || {};
+    const prevDeps = prev.deps;
+    const depsChanged = !depsFn ||
+      !prevDeps ||
+      depsVal.length !== prevDeps.length ||
+      depsVal.some((v, i) => v !== prevDeps[i]);
+    if (depsChanged) {
+      if (typeof prev.cleanup === 'function') prev.cleanup();
+      const cleanup = fn();         // run effect and optionally get cleanup
+      inC.hk.set(hoK, { deps: depsVal, cleanup });
+    }
+  };
+  s.add(runSide);
+};
+// --- Class Components c()
+export const c = (base = Object, def) => {
+  return class Module extends base {
+    constructor(props) {
+      super(props);
+
+      this.props = props || {};
+      this.state = def.state ? def.state() : {};
+      this.render = def.render.bind(this);
+
+      this.effects = [];
+      this.cleanups = [];
+
+      if (typeof def.setup === "function") {
+        def.setup.call(this, props);
+      }
+
+      if (typeof this.componentWillMount === "function") {
+        this.componentWillMount();
+      }
+    }
+
+    setState(partial) {
+      this.state = { ...this.state, ...partial };
+      s.add(() => this.update());
+    }
+
+    mount(container) {
+      if (typeof this.componentDidMount === "function") {
+        s.add(() => this.componentDidMount());
+      }
+      const vnode = this.render(this.props, this.state, this.props.children);
+      this._vnode = vnode;
+      return vnode;
+    }
+
+    update() {
+      if (typeof this.componentDidUpdate === "function") {
+        this.componentDidUpdate(this.props, this.state);
+      }
+      const newVNode = this.render(this.props, this.state, this.props.children);
+      this._vnode = newVNode;
+      return newVNode;
+    }
+
+    onMount(fn) { this.effects.push(fn); }
+    runEffects() { this.effects.forEach(fn => fn()); }
+
+    onUnmount(fn) { this.cleanups.push(fn); }
+    cleanup() {
+      if (typeof this.componentWillUnmount === "function") {
+        this.componentWillUnmount();
+      }
+      this.cleanups.forEach(fn => fn());
+    }
+  };
+};
+
+const HYP = {h,e,a,sA,dA,c};
 window.HYP = HYP;
 export default HYP;
