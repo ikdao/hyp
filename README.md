@@ -1,23 +1,23 @@
-Hyp UI Framework
+Hyp UI Framework(in dev)
 ================
 
-**Hyp** (by [ikdao](https://ikdao.org)) is an **Indie Indic UI Framework** built to experiment with minimal functional UI design patterns, inspired by hyperscript, reactive state, and virtual DOM execution.
+**Hyp** (by [ikdao](https://ikdao.org)) is an **Indie Indic UI/UX/IX Framework** built to experiment with minimal functional UI design patterns, inspired by hyperscript, reactive state, and virtual DOM execution.
 
 *   **Lightweight**: Pure JS, minimal abstractions.
     
-*   **Reactive**: Built-in state, derived state, and side-effects.
+*   **Reactive**: Built-in Actor/state, derived Act, and side Act.
     
 *   **Composable**: Functions are the building blocks.
     
 *   **Experimental**: Targets SPA, SVG, AR/VR, and beyond.
     
 
-Essentials
+HYP Core and Essentials 
 ----------
 
-### h() — Hyperscript
+## h() — Hyperscript
 
-The h() function creates a **virtual DOM node (VNode)**.
+The h() function structure organs, organelles **virtual DOM node (VNode)**.
 
 Plain text
 `   import { h } from "hyp";  const vnode = h("div", { class: "box" }, "Hello Hyp");   `
@@ -27,11 +27,20 @@ Plain text
 *   prp → props (attributes, events, class, style, etc.)
     
 *   chd → children (string, number, VNode, or array)
-    
 
-### e() — Executor
+## Triad E,O,S - living interface
+-----
+### Orchestrater & Directors
 
-The e() function renders or updates the VDOM into the real DOM.
+**o (Organiser)** - identity and spatial manager, for awaring
+create and organise organs
+
+### e() — Executor - behaviour and renderer
+render, redo organs(vDOM)
+
+**s (Scheduler)** - Temporal Manager, for attending
+run, clear organs, actors lifecycle 
+
 
 Plain text
 `   import { h, e } from "hyp";  const App = () => h("h1", null, "Hello World");  e(h(App), document.getElementById("root"));   `
@@ -51,15 +60,6 @@ Necessaries
 -----------
 
 These are the **core reactive orchestration primitives**.
-
-### Orchestrater
-
-*   **o (Organiser)** → spatial mapping context (per component instance)
-    
-*   **s (Scheduler)** → async microtask queue for updates
-    
-
-### Directors
 
 *   const counter = a(0);console.log(counter.get()); // 0counter.set(1);
     
