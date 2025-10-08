@@ -1,470 +1,488 @@
-//  HYP FRAMEWORK CORE v0.11.11
+// HYP UI Framework
+
 // Zero One One License - 011sl
 // https://legal/ikdao.org/license/011sl
 // Hyp UI Framework - [Hemang Tewari]
 
-// ===== HYP Core =====
 
+// HYP Organ Factory h()
 // --- 1. Hyperscript h() ---
 export const h = (ty, prp, ...chd) => {
-  if (!prp) prp = {};
-  if (prp && (typeof prp !== 'object' || prp.ty)) {
-    chd.unshift(prp);
-    prp = {};
-  }
-
-  const flatChildren = [];
-  const flatten = (arr) => { arr.forEach(c => {
-      if (c == null || c === false || c === undefined ) return;
-      if (Array.isArray(c)) { flatten(c); return; }
-      const t = typeof c;
-      if (t === 'string' || t === 'number' || t === 'boolean') {
-        flatChildren.push(String(c));
-        return;
-      }
-      if (t === 'object' && c && ('ty' in c) &&
-          (typeof c.ty === 'string' || typeof c.ty === 'function')) {
-        flatChildren.push(c);
-        return;
-      }
-    });
-  };
-  flatten(chd);
-  return{ ty, prp, chd: flatChildren, key: prp.key || null, ref: prp.ref || null};
-};
-
-
-// --- 2. Organiser (o)---
-export const o = new Map();
-let oID_counter = 0;
-let oID = null;
-let tr = null;
-
-function gCI() {
-  if (oID === null) throw new Error("Organiser Hooks must be inside component.");
-  return oID;
-};
-
-
-// 3. Scheduler s()
-export const s = (function() {
-  const mainQueue = new Set();   // DOM-safe tasks
-  const workerQueue = [];        // heavy tasks
-  const maxWorkers = 4;
-  const workers = [];
-  let running = false;
-
-  // --- Run main thread tasks ---
-  function runMain() {
-    mainQueue.forEach(fn => {
-      try { fn(); } catch(e){ console.error("Main-thread task error:", e); }
-    });
-    mainQueue.clear();
-    running = false;
-  }
-
-  // --- Worker execution ---
-  function runNextWorker() {
-    if (!workerQueue.length) return;
-    const task = workerQueue.shift();
-    const w = getWorker();
-    if (!w) {
-      // fallback to main thread
-      try { task(); } catch(e){ console.error("Worker fallback task error:", e); }
-      runNextWorker();
-      return;
+    if (prp == null || typeof prp !== "object" || Array.isArray(prp)) {
+        chd.unshift(prp);
+        prp = {};
     }
-    const workerObj = workers.find(wk => wk.worker === w);
-    workerObj.busy = true;
-    w.postMessage(task.toString());
-  }
 
-  function getWorker() {
-    if (workers.length < maxWorkers) {
-      const w = new Worker(URL.createObjectURL(
-        new Blob([`
-          onmessage = e => {
-            try {
-              postMessage(eval('(' + e.data + ')()'));
-            } catch(err) {
-              postMessage({ error: err.toString() });
+    const flatChildren = [];
+    const flatten = (arr) => {
+        for (const c of arr) {
+            if (c == null || c === false) continue;
+
+            if (Array.isArray(c)) {
+                flatten(c);
             }
-          };
-        `], { type: 'text/javascript' })
-      ));
-      w.onmessage = () => {
-        const obj = workers.find(wk => wk.worker === w);
-        obj.busy = false;
-        runNextWorker();
-      };
-      workers.push({ worker: w, busy: false });
-      return w;
-    }
-    const idle = workers.find(wk => !wk.busy);
-    return idle?.worker || null;
-  }
+            else if (c instanceof Actor) {
+                flatChildren.push(c);
+            }
+            else if (typeof c === "string" || typeof c === "number" || typeof c === "boolean") {
+                flatChildren.push(String(c));
+            }
+            else if (typeof c === "object" && c.ty) {
+                flatChildren.push(c);
+            }
+            else if (typeof c === "function") {
+                flatChildren.push(c());
+            }
+            else {
+                flatChildren.push(String(c));
+            }
+        }
+    };
+    flatten(chd);
 
-  return {
-    // DOM-safe tasks
-    add(fn) {
-      mainQueue.add(fn);
-      if (!running) {
-        running = true;
-        queueMicrotask(runMain);
-      }
-    },
-
-    // heavy async tasks
-    addWorkerTask(fn) {
-      workerQueue.push(fn);
-      if (!running) {
-        running = true;
-        queueMicrotask(runMain);
-      }
+    if (typeof ty === "function") {
+        return ty({ ...prp, children: flatChildren });
     }
-  };
+    return {
+        ty,
+        prp,
+        chd: flatChildren,
+        key: prp.key ?? null,
+        ref: prp.ref ?? null,
+    };
+};
+
+// HYP Triad Architectural Pattern
+// spatial/temporal/execution
+
+//  SCHEDULER (s)    
+//  Temporal Layer — queues & runs tasks efficiently    
+
+export const s = (function () {
+    const left = new Set();
+    let flushing = false;
+
+    function flush() {
+        flushing = false;
+        const tasks = Array.from(left);
+        left.clear();
+        for (const task of tasks) {
+            try { task.fn(); }
+            catch (err) { console.error("Scheduler task error:", err); }
+        }
+    }
+
+    return {
+        add(fn, ei) {
+            if (ei && !o.isAlive(ei)) return;
+            left.add({ fn, ei });
+            if (!flushing) {
+                queueMicrotask(flush);
+                flushing = true;
+            }
+        },
+
+        flush() { flush(); },
+
+        clear(ei) {
+            for (const task of [...left]) {
+                if (task.ei === ei) left.delete(task);
+            }
+        }
+    };
 })();
 
-// --- 4. Executor (e) ---
-let prevVNode = null;
-export const e = (vnode, container) => {
-  const wC = (vN) => {
-    const fn = vN.ty;
-    const iD = vN.coI || ++oID_counter;
-    vN.coI = iD;
-    if (!o.has(iD)) {
-      o.set(iD, { hk: new Map(), ei: 0 });
-    }
-    const oldoID = oID;
-    oID = iD;
-    o.get(iD).ei = 0;
+//  ORGANISER (o)    
+//  Structural Layer — Organise Organs, keep identities and map
 
-    // --- If it's an m() Module class ---
-    if (fn.prototype && fn.prototype.render) {
-      if (!vN.inst) {
-        vN.inst = new fn(vN.prp || {});
-        vN.inst._vnode = vN;
-      }
-      const out = vN.inst.render(vN.prp || {}, vN.inst.state, vN.prp?.children);
-      oID = oldoID;
-      return out;
-    }
+export const o = (function () {
+    const organs = new Map();
+    let nextEi = 1;
 
-    // --- Function component ---
-    const rN = fn(vN.prp || {});
-    oID = oldoID;
-    return rN;
-  };
+    function newEi() { return "ei_" + nextEi++; }
 
-  const setprp = (el, key, val) => {
-    if (key === 'key' || key === 'ref') return;
-    if (key.startsWith('on') && typeof val === 'function')
-      el.addEventListener(key.slice(2).toLowerCase(), val);
-    else if (key === 'className' || key === 'class') el.className = val || '';
-    else if (key === 'style') {
-      if (typeof val === 'string') el.style.cssText = val;
-      else if (val) Object.assign(el.style, val);
-    } else if (key in el && key !== 'list') {
-      try { el[key] = val; } 
-      catch { if (val != null) el.setAttribute(key, val); }
-    } else {
-      val == null || val === false ? el.removeAttribute(key) : el.setAttribute(key, val === true ? '' : val);
-    }
-  };
+    return {
+        create(hi, body) {
+            const ei = newEi();
+            organs.set(ei, {
+                hi,
+                body,
+                ctx: new Map(),
+                mounted: true,
+                lifecycles: {
+                    willMount: [], didMount: [],
+                    willUpdate: [], didUpdate: [],
+                    willUnmount: [], didUnmount: []
+                },
+                effects: new Set()
+            });
+            return ei;
+        },
+        addLifecycle(ei, phase, fn) {
+            const inst = organs.get(ei);
+            if (inst) inst.lifecycles[phase].push(fn);
+        },
+        runLifecycle(ei, phase, bodyRef) {
+            const inst = organs.get(ei);
+            if (!inst) return;
+            const list = inst.lifecycles[phase];
+            if (!list) return;
+            for (const fn of list)
+                s.add(() => fn(bodyRef), ei);
+        },
+        addEffect(ei, clear) {
+            const inst = organs.get(ei);
+            if (inst) inst.effects.add({ clear });
+        },
+        destroy(ei, { runLifecycle = true } = {}) {
+            const inst = organs.get(ei);
+            if (!inst) return;
 
-  const removeprp = (el, key, val) => {
-    if (key.startsWith('on') && typeof val === 'function') {
-      el.removeEventListener(key.slice(2).toLowerCase(), val);
-    } else setprp(el, key, null);
-  };
+            inst.mounted = false;
 
-  const unmount = (vnode) => {
-    if (!vnode?.coI) return;
-    const ctx = o.get(vnode.coI);
-    if (ctx) {
-      // If it was a Module, call cleanup
-      if (vnode.inst && typeof vnode.inst.cleanup === "function") {
-        vnode.inst.cleanup();
-      }
-      ctx.hk.forEach(h => { if (h && typeof h.cleanup === 'function') h.cleanup(); });
-      o.delete(vnode.coI);
-    }
-    vnode.chd?.forEach(unmount);
-  };
+            if (runLifecycle) {
+                this.runLifecycle(ei, "willUnmount");
+                s.add(() => this.runLifecycle(ei, "didUnmount"), ei);
+            }
 
-  const SVG_NS = "http://www.w3.org/2000/svg";
-  const createDOM = (vnode, inSVG = false) => {
-    if (typeof vnode !== 'object' || vnode == null) return document.createTextNode(String(vnode));
-    if (Array.isArray(vnode)) {
-      const frag = document.createDocumentFragment();
-      vnode.forEach(c => c != null && frag.appendChild(createDOM(c, inSVG)));
-      return frag;
-    }
-    const { ty, prp, chd, ref } = vnode;
+            if (inst.effects) {
+                for (const ef of inst.effects)
+                    if (typeof ef.clear === "function") {
+                        try { ef.clear(); }
+                        catch (err) { console.error("Effect clear error:", err); }
+                    }
+            }
+            organs.delete(ei);
+            s.clear(ei);
+        },
+        get(ei) { return organs.get(ei); },
+        has(ei) { return organs.has(ei); },
+        isAlive(ei) {
+            const inst = organs.get(ei);
+            return inst ? inst.mounted : false;
+        },
+        all() { return organs; }
+    };
+})();
 
-    if (ty.prototype && ty.prototype.render) {
-      if (!vnode.inst) {
-        vnode.inst = new ty(prp || {});
-        vnode.inst._vnode = vnode;
-        vnode.inst.componentWillMount?.();
-      }
-      const subTree = vnode.inst.render(prp || {}, vnode.inst.state, prp?.children);
-      const dom = createDOM(subTree, inSVG);
-      vnode.dom = dom;
-      s.add(() => vnode.inst.componentDidMount?.());
-      return dom;
-    }
+// executor e()
+// EI execution identity/instance
+// render/update/unmount
 
-    // --- Function components ---
-    if (typeof ty === 'function') {
-      const rN = wC(vnode);
-      vnode.chd = [rN];
-      return createDOM(rN, inSVG);
-    }
+export const e = (function () {
+    const execStack = [];
 
-    // --- Normal DOM nodes ---
-    const isSVG = inSVG || ty === 'svg';
-    const el = isSVG
-      ? document.createElementNS(SVG_NS, ty)
-      : document.createElement(ty);
+    function pushEI(ei) { execStack.push(ei); }
+    function popEI() { execStack.pop(); }
+    function currentEI() { return execStack[execStack.length - 1] || null; }
 
-    if (prp) Object.keys(prp).forEach(k => {
-      if (k.startsWith('on') && typeof prp[k] === 'function') {
-        el.addEventListener(k.slice(2).toLowerCase(), prp[k]);
-      } else if (isSVG) {
-        el.setAttribute(k, prp[k]);
-      } else {
-        setprp(el, k, prp[k]);
-      }
-    });
-
-    if (ref) typeof ref === 'function' ? ref(el) : ref.current = el;
-    chd?.forEach(c => el.appendChild(createDOM(c, isSVG)));
-    return el;
-  };
-
-  const patch = (dom, oldV, newV) => {
-    if (typeof oldV !== 'object' || oldV == null ||
-        typeof newV !== 'object' || newV == null ||
-        oldV.ty !== newV.ty) {
-      if (oldV !== newV || oldV.ty !== newV.ty) {
-        unmount(oldV);
-        const newDom = createDOM(newV);
-        dom.replaceWith(newDom);
-        return newDom;
-      }
-      return dom;
+    function render(vnode, body) {
+        const hi = vnode?.ty?.name || vnode?.ty || "anonymous";
+        const ei = o.create(hi, body);
+        pushEI(ei);
+        o.runLifecycle(ei, "willMount");
+        const dom = createDom(vnode, ei);
+        if (body) body.appendChild(dom);
+        s.add(() => o.runLifecycle(ei, "didMount"), ei);
+        popEI();
+        return ei;
     }
 
-    // --- Module diff ---
-    if (newV.ty.prototype && newV.ty.prototype.render) {
-      const inst = oldV.inst || new newV.ty(newV.prp || {});
-      newV.inst = inst;
-      inst.props = newV.prp || {};
-      const newSubTree = inst.render(inst.props, inst.state, inst.props.children);
-      inst.componentDidUpdate?.(oldV.prp, inst.state);
-      return patch(dom, oldV.chd[0], newSubTree);
-    }
+    function patch(dom, oldVNode, newVNode, ei) {
+        if (!dom || !o.isAlive(ei)) return;
+        pushEI(ei);
+        o.runLifecycle(ei, "willUpdate");
 
-    // --- Function component diff ---
-    if (typeof newV.ty === 'function') {
-      const resultVNode = wC(newV);
-      newV.chd = [resultVNode];
-      return patch(dom, oldV.chd[0], resultVNode);
-    }
-
-    // --- DOM node diff ---
-    const oldprp = oldV.prp || {};
-    const newprp = newV.prp || {};
-    Object.keys(oldprp).forEach(k => { if (!(k in newprp)) removeprp(dom, k, oldprp[k]); });
-    Object.keys(newprp).forEach(k => {
-      const oldVal = oldprp[k];
-      const newVal = newprp[k];
-      if (oldVal !== newVal) {
-        if (k === 'value' && (dom.tagName === 'INPUT' || dom.tagName === 'TEXTAREA')) {
-          if (dom.value !== newVal) dom.value = newVal;
-          return;
+        if (oldVNode.ty !== newVNode.ty || oldVNode.key !== newVNode.key) {
+            const newDom = createDom(newVNode, ei);
+            dom.replaceWith(newDom);
+            s.add(() => o.runLifecycle(ei, "didUpdate"), ei);
+            popEI();
+            return newDom;
         }
-        if (k === 'checked' && dom.tagName === 'INPUT') {
-          if (dom.checked !== newVal) dom.checked = newVal;
-          return;
+
+        if (oldVNode instanceof Actor && newVNode instanceof Actor) {
+            dom.data = newVNode.get();
+            s.add(() => o.runLifecycle(ei, "didUpdate"), ei);
+            popEI();
+            return dom;
         }
-        if (k.startsWith('on') && typeof oldVal === 'function') dom.removeEventListener(k.slice(2).toLowerCase(), oldVal);
-        setprp(dom, k, newVal);
-      }
-    });
+        if ((typeof oldVNode === "string" || typeof oldVNode === "number") &&
+            (typeof newVNode === "string" || typeof newVNode === "number")) {
+            const newVal = String(newVNode);
+            if (dom.data !== newVal) dom.data = newVal;
+            s.add(() => o.runLifecycle(ei, "didUpdate"), ei);
+            popEI();
+            return dom;
+        }
+        updateprps(dom, oldVNode.prp || {}, newVNode.prp || {});
+        patchChildren(dom, oldVNode.chd || [], newVNode.chd || [], ei);
 
-    // --- Hybrid child diff ---
-    const oldChildren = oldV.chd || [];
-    const newChildren = newV.chd || [];
+        if (newVNode.ref) newVNode.ref(dom);
+        s.add(() => o.runLifecycle(ei, "didUpdate"), ei);
+        popEI();
 
-    const oldKeyed = new Map();
-    oldChildren.forEach((c, i) => {
-      if (c?.prp?.key != null) oldKeyed.set(c.prp.key, { vnode: c, index: i });
-    });
-
-    const max = Math.max(oldChildren.length, newChildren.length);
-    let domIndex = 0;
-
-    for (let i = 0; i < max; i++) {
-      const newC = newChildren[i];
-      const oldC = newC?.prp?.key != null ? oldKeyed.get(newC.prp.key)?.vnode : oldChildren[domIndex];
-
-      if (!oldC && newC) {
-        const newNode = createDOM(newC);
-        dom.appendChild(newNode);
-        domIndex++;
-      } else if (!newC && oldC) {
-        const domChild = dom.childNodes[domIndex];
-        unmount(oldC);
-        dom.removeChild(domChild);
-      } else if (oldC && newC) {
-        const domChild = dom.childNodes[domIndex];
-        patch(domChild, oldC, newC);
-        domIndex++;
-        if (newC.prp?.key != null) oldKeyed.delete(newC.prp.key);
-      }
+        return dom;
     }
 
-    oldKeyed.forEach(({ vnode, index }) => {
-      const domChild = dom.childNodes[index];
-      if (domChild) {
-        unmount(vnode);
-        dom.removeChild(domChild);
-      }
-    });
+    function unmount(vnode = null, ei) {
+        const inst = o.get(ei);
+        if (!inst) return;
+        pushEI(ei);
+        const bodyRef = inst.body;
 
-    return dom;
-  };
+        o.runLifecycle(ei, "willUnmount");
+        if (bodyRef?.parentNode)
+            bodyRef.parentNode.removeChild(bodyRef);
 
-  const targetDom = container.firstChild;
-  if (!prevVNode || !targetDom) {
-    container.textContent = '';
-    container.appendChild(createDOM(vnode));
-  } else {
-    patch(targetDom, prevVNode, vnode);
-  }
-  prevVNode = vnode;
-};
+        s.add(() => o.runLifecycle(ei, "didUnmount", bodyRef), ei);
 
-// Reactive Actors/States
+        o.destroy(ei, { runLifecycle: false });
+        popEI();                      // pop after everything done    
+    }
 
-// --- 5. Actor (a) ---
-export const a = initial => {
-  let value = initial;
-  const subs = new Set();
-  return {
-    get: () => { if (tr) subs.add(tr); return value; },
-    set: next => {
-      if (next !== value) {
-        value = next;
-        subs.forEach(fn => s.add(fn));
-    s.add(rF); 
-      }
-    },
-    subscribe: fn => { subs.add(fn); return () => subs.delete(fn); }
-  };
-};
-// --- 6. Derive Act (dA) ---
-export const dA = (fn) => {
-  const iD = gCI();
-  const inC = o.get(iD);
-  const hoK = 'dA-' + inC.ei++;
-  if (!inC.hk.has(hoK)) {
-    const si = a(undefined);
+
+    function createDom(v, ei) {
+        // null or primitive → text node  
+        if (v == null) return document.createTextNode("");
+        if (typeof v === "string" || typeof v === "number")
+            return document.createTextNode(String(v));
+
+        // Reactive text node (Actor or dA)  
+        if (v instanceof Actor) {
+            const textNode = document.createTextNode(v.get());
+            const update = () => { textNode.data = v.get(); };
+            const unsub = v.subscribe(update);
+            // tie cleanup to organiser (o)  
+            if (ei) o.addEffect(ei, unsub);
+            return textNode;
+        }
+
+        const el = document.createElement(v.ty);
+
+        for (const [k, val] of Object.entries(v.prp || {})) {
+            if (k.startsWith("on") && typeof val === "function") {
+                el.addEventListener(k.slice(2).toLowerCase(), val);
+                continue;
+            }
+            if (k === "style" && typeof val === "object") {
+                for (const [sk, sv] of Object.entries(val)) {
+                    if (sv instanceof Actor) {
+                        const updateStyle = () => { el.style[sk] = sv.get(); };
+                        updateStyle();
+                        const unsub = sv.subscribe(updateStyle);
+                        if (ei) o.addEffect(ei, unsub);
+                    } else {
+                        el.style[sk] = sv;
+                    }
+                }
+                continue;
+            }
+            if (val instanceof Actor) {
+                const updateAttr = () => {
+                    const next = val.get();
+                    if (k in el) el[k] = next;
+                    else el.setAttribute(k, next);
+                };
+                updateAttr();
+                const unsub = val.subscribe(updateAttr);
+                if (ei) o.addEffect(ei, unsub);
+                continue;
+            }
+
+            if (k in el) el[k] = val;
+            else el.setAttribute(k, val);
+        }
+
+        (v.chd || []).forEach(ch => {
+            el.appendChild(createDom(ch, ei));
+        });
+
+        if (v.ref) v.ref(el);
+
+        return el;
+    }
+
+    function updateprps(dom, oldprps, newprps) {
+        for (const k in oldprps) {
+            if (!(k in newprps)) {
+                if (k.startsWith("on") && typeof oldprps[k] === "function")
+                    dom.removeEventListener(k.slice(2).toLowerCase(), oldprps[k]);
+                else
+                    dom.removeAttribute(k);
+            }
+        }
+
+        for (const [k, v] of Object.entries(newprps)) {
+            if (oldprps[k] !== v) {
+                if (k.startsWith("on") && typeof v === "function") {
+                    if (oldprps[k]) dom.removeEventListener(k.slice(2).toLowerCase(), oldprps[k]);
+                    dom.addEventListener(k.slice(2).toLowerCase(), v);
+                } else {
+                    dom.setAttribute(k, v);
+                }
+            }
+        }
+    }
+
+    function patchChildren(dom, oldCh, newCh, ei) {
+        const oldKeyed = new Map();
+        const usedIndices = new Set();
+
+        oldCh.forEach((c, i) => {
+            if (c && c.key != null) oldKeyed.set(c.key, { vnode: c, index: i });
+        });
+
+        newCh.forEach((nV, newIndex) => {
+            let matched;
+            const oldNode = dom.childNodes[newIndex];
+
+            if (nV.key != null) {
+                matched = oldKeyed.get(nV.key);
+                if (matched) {
+                    const childNode = dom.childNodes[matched.index];
+                    patch(childNode, matched.vnode, nV, ei);
+                    usedIndices.add(matched.index);
+
+                    const refNode = dom.childNodes[newIndex] || null;
+                    if (childNode !== refNode) dom.insertBefore(childNode, refNode);
+                    return;
+                } else {
+                    const el = createDom(nV, ei);
+                    const refNode = dom.childNodes[newIndex] || null;
+                    dom.insertBefore(el, refNode);
+                    return;
+                }
+            }
+
+            if (nV instanceof Actor) {
+                if (oldNode && oldCh[newIndex] instanceof Actor) {
+                    // update text node directly
+                    oldNode.data = nV.get();
+                } else {
+                    const newNode = createDom(nV, ei);
+                    if (oldNode) dom.replaceChild(newNode, oldNode);
+                    else dom.appendChild(newNode);
+                }
+                return;
+            }
+
+            // Normal patching for primitives/elements
+            if (oldNode && !usedIndices.has(newIndex)) {
+                patch(oldNode, oldCh[newIndex], nV, ei);
+            } else if (!oldNode) {
+                dom.appendChild(createDom(nV, ei));
+            }
+
+            // update ref if present
+            if (nV.ref) {
+                const currentNode = dom.childNodes[newIndex];
+                if (currentNode) nV.ref(currentNode);
+            }
+        });
+
+        // remove excess old nodes
+        for (let i = oldCh.length - 1; i >= 0; i--) {
+            const oV = oldCh[i];
+            if (!usedIndices.has(i) && (!oV.key || !newCh.find(n => n.key === oV.key))) {
+                const node = dom.childNodes[i];
+                if (node) dom.removeChild(node);
+            }
+        }
+    }
+
+    return { render, patch, unmount, pushEI, popEI, currentEI };
+})();
+
+// Active/Reactive/Interactive Parts
+
+// Actor a() 
+let tr = null;
+export class Actor {
+    constructor(initial) {
+        this.value = initial;
+        this.subs = new Set();
+    }
+    get() {
+        if (tr) this.subs.add(tr);
+        return this.value;
+    }
+    set(next) {
+        if (next === this.value) return;
+        this.value = next;
+        this.subs.forEach(fn => s.add(fn));
+    }
+    subscribe(fn) {
+        this.subs.add(fn);
+        return () => this.subs.delete(fn);
+    }
+}
+export const a = (initial) => new Actor(initial);
+
+// Derived Act dA()
+export const dA = (compute) => {
+    const sig = a();
     const recompute = () => {
-      tr = recompute;
-      const newValue = fn();
-      tr = null;
-      if (newValue !== si.get()) si.set(newValue);
+        tr = recompute;
+        const val = compute();
+        tr = null;
+        sig.set(val);
     };
     recompute();
-    inC.hk.set(hoK, si);
-  }
-  return inC.hk.get(hoK);
+    return sig;
 };
 
-// --- 7. Side Act (sA) ---
-export const sA = (fn, depsFn = null) => {
-  const iD = gCI();
-  const inC = o.get(iD);
-  const hoK = 'sA-' + inC.ei++;
-  const runSide = () => {
-    tr = runSide;
-    const depsVal = depsFn ? depsFn() : null;
-    tr = null;
-    const prev = inC.hk.get(hoK) || {};
-    const prevDeps = prev.deps;
-    const depsChanged = !depsFn ||
-      !prevDeps ||
-      depsVal.length !== prevDeps.length ||
-      depsVal.some((v, i) => v !== prevDeps[i]);
-    if (depsChanged) {
-      if (typeof prev.cleanup === 'function') prev.cleanup();
-      const cleanup = fn();         // run effect and optionally get cleanup
-      inC.hk.set(hoK, { deps: depsVal, cleanup });
-    }
-  };
-  s.add(runSide);
+// Side Act sA() (bugs)
+export const sA = (effect, depsFn = null, explicitEI = null) => {
+    const ei = explicitEI ?? e.currentEI(); // fallback to currentEI
+    if (!ei) return;
+    const inst = o.get(ei);
+    if (!inst) return;
+
+    if (!inst.ctx.has('sA-hooks')) inst.ctx.set('sA-hooks', new Map());
+    const hk = inst.ctx.get('sA-hooks');
+    const key = `sA-${hk.size}`;
+
+    const isEqualDeps = (a, b) => {
+        if (!a || !b || a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            if (!Object.is(a[i], b[i])) return false;
+        }
+        return true;
+    };
+    let unsubscribers = [];
+    const run = () => {
+        tr = run;
+        const deps = depsFn ? depsFn() : [];
+        tr = null;
+
+        const prev = hk.get(key);
+        const changed = !prev || !isEqualDeps(deps, prev.deps);
+
+        if (changed) {
+            // cleanup previous effect and Actor subscriptions
+            prev?.clear?.();
+            unsubscribers.forEach(u => u());
+            unsubscribers = [];
+
+            // run effect
+            const clear = effect();
+            hk.set(key, { deps, clear });
+            if (clear) inst.effects.add({ clear });
+
+            // auto re-run if any Actor deps change
+            for (const d of deps) {
+                if (d instanceof Actor) {
+                    const unsub = d.subscribe(() => s.add(run, ei));
+                    unsubscribers.push(unsub);
+                    if (ei) o.addEffect(ei, unsub);
+                }
+            }
+        }
+    };
+    run();
+    s.add(run, ei);
 };
-// --- Class Components c()
-export const c = (base = Object, def) => {
-  return class Module extends base {
-    constructor(props) {
-      super(props);
-
-      this.props = props || {};
-      this.state = def.state ? def.state() : {};
-      this.render = def.render.bind(this);
-
-      this.effects = [];
-      this.cleanups = [];
-
-      if (typeof def.setup === "function") {
-        def.setup.call(this, props);
-      }
-
-      if (typeof this.componentWillMount === "function") {
-        this.componentWillMount();
-      }
-    }
-
-    setState(partial) {
-      this.state = { ...this.state, ...partial };
-      s.add(() => this.update());
-    }
-
-    mount(container) {
-      if (typeof this.componentDidMount === "function") {
-        s.add(() => this.componentDidMount());
-      }
-      const vnode = this.render(this.props, this.state, this.props.children);
-      this._vnode = vnode;
-      return vnode;
-    }
-
-    update() {
-      if (typeof this.componentDidUpdate === "function") {
-        this.componentDidUpdate(this.props, this.state);
-      }
-      const newVNode = this.render(this.props, this.state, this.props.children);
-      this._vnode = newVNode;
-      return newVNode;
-    }
-
-    onMount(fn) { this.effects.push(fn); }
-    runEffects() { this.effects.forEach(fn => fn()); }
-
-    onUnmount(fn) { this.cleanups.push(fn); }
-    cleanup() {
-      if (typeof this.componentWillUnmount === "function") {
-        this.componentWillUnmount();
-      }
-      this.cleanups.forEach(fn => fn());
-    }
-  };
-};
-
-const HYP = {h,e,a,sA,dA,c};
+const HYP = { h, e, o, s, a, sA, dA };
 window.HYP = HYP;
 export default HYP;
