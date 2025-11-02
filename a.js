@@ -1,16 +1,23 @@
-// Actor a()
 
-export const a = (initial) => {
-  let value = initial;
-  const subs = new Set();
-
-  return {
-    get() { if (tracking) subs.add(tracking); return value; },
+// Actor a() 
+let tr = null;
+export class Actor {
+    constructor(initial) {
+        this.value = initial;
+        this.subs = new Set();
+    }
+    get() {
+        if (tr) this.subs.add(tr);
+        return this.value;
+    }
     set(next) {
-      if (next === value) return;
-      value = next;
-      subs.forEach(fn => s.add(fn));
-    },
-    subscribe(fn) { subs.add(fn); return () => subs.delete(fn); }
-  };
-};
+        if (next === this.value) return;
+        this.value = next;
+        this.subs.forEach(fn => s.add(fn));
+    }
+    subscribe(fn) {
+        this.subs.add(fn);
+        return () => this.subs.delete(fn);
+    }
+}
+export const a = (initial) => new Actor(initial);
