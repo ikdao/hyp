@@ -1,198 +1,223 @@
+# HYP UI Framework Documentation
+
+**License:** Zero One One License - [011sl](https://legal/ikdao.org/license/011sl)
+**Author:** Hemang Tewari
+
 ---
-HYP UI Framework — v0.11.12
-===========================
 
-**License:** Zero One One License — [011sl](https://legal/ikdao.org/license/011sl)**Author:** Hemang Tewari
+## Overview
 
-A lightweight, modular UI framework implementing a **Triad Architecture** (Executor, Organiser, Scheduler) with first-class reactive primitives (Actor, dA, sA) and developer-controlled lifecycles.
+The **HYP UI Framework** is a lightweight, hyperscript-driven UI framework that emphasizes declarative construction, reactive state management, and lifecycle organization. It is structured around the **HYP Triad Architectural Pattern**:
 
-1\. Core Architectural Pattern: Triad
--------------------------------------
+1. **Scheduler (s)** — Temporal layer for efficient task queuing and execution.
+2. **Organiser (o)** — Structural layer for managing component identities, lifecycles, and contexts.
+3. **Executor (e)** — Execution layer for rendering, updating, and unmounting components.
 
-HYP’s triad separates **responsibilities** clearly:
+---
 
-LayerAbbreviationRoleTemporals (Scheduler)Orchestrates asynchronous updates, task batching, and lifecycle scheduling.Structuralo (Organiser)Manages organ/component state, lifecycle, and cleanup.Spatiale (Executor)Mounts, patches, and unmounts virtual nodes in the DOM.
+## Core Modules
 
-This design allows controlled circular coupling where necessary (e.g., o ↔ s) without leaking dependencies.
+### 1. Hyperscript Function — `h()`
 
-2\. Virtual Node Factory: h()
------------------------------
+```js
+h(ty, prp, ...chd)
+```
 
-Creates virtual DOM nodes or component factories (organs).
+Creates a virtual node (VNode) representation of a UI element. Similar in concept to React's `createElement`.
 
-**Signature**
+**Parameters:**
 
-Plain text`   h(type, props?, ...children)   `
+* `ty` — Element type or functional component.
+* `prp` — Properties (attributes, event handlers, styles, refs).
+* `...chd` — Children (strings, numbers, arrays, other VNodes, or Actors).
 
-**Parameters**
+**Returns:**
+A virtual node object or component output.
 
-*   type: string | function — DOM element or organ factory.
-    
-*   props: object? — attributes, event handlers, refs, keys.
-    
-*   children: Array — nested nodes, strings, or reactive signals.
-    
+**Behavior:**
 
-**Returns**: VNode
+* Normalizes properties and children.
+* Supports nested arrays and function-based children.
+* If `ty` is a function, executes it as a component.
 
-Plain text`   {    ty,      // type    prp,     // props    chd,     // flattened children    key?,    // optional key for diffing    ref?     // optional ref callback  }   `
+---
 
-**Notes**
+### 2. Scheduler — `s`
 
-*   Arrays, nested children, and Actors are automatically flattened.
-    
-*   Functions as children are invoked lazily.
-    
-*   Functional organs receive { ...props, children } as input.
-    
+Responsible for queuing and flushing asynchronous tasks efficiently using `queueMicrotask`.
 
-3\. Scheduler: s
-----------------
+**API:**
 
-Responsible for **temporal coordination**.
+```js
+s.add(fn, ei)
+s.flush()
+s.clear(ei)
+```
 
-**API**
+**Usage:**
 
-Plain text`   s.add(fn, ei?)      // schedule a task, optionally bound to organ instance  s.flush()            // immediately run pending tasks  s.clear(ei)          // remove tasks associated with unmounted organ   `
+* Schedules lifecycle hooks, updates, and reactivity changes.
+* Clears scheduled tasks for destroyed components.
 
-**Behavior**
+---
 
-*   Batches microtasks to avoid unnecessary DOM thrashing.
-    
-*   Verifies organ liveness (o.isAlive) before execution.
-    
-*   Works closely with o for lifecycle and effect cleanup.
-    
+### 3. Organiser — `o`
 
-4\. Organiser: o
-----------------
+Manages **Organs**, the internal representation of component instances. Each organ maintains its state, lifecycle hooks, and effects.
 
-Manages **component identities, state, lifecycles, and side-effects**.
+**API:**
 
-**API**
+```js
+o.create(hi, body)
+o.addLifecycle(ei, phase, fn)
+o.runLifecycle(ei, phase, bodyRef)
+o.addEffect(ei, clear)
+o.destroy(ei)
+o.get(ei)
+o.isAlive(ei)
+```
 
-Plain text`   o.create(hi, body)               // register new organ instance, returns ei  o.addLifecycle(ei, phase, fn)    // register lifecycle callback  o.runLifecycle(ei, phase, body)  // trigger lifecycle callbacks  o.addEffect(ei, clear)           // register cleanup function  o.destroy(ei, opts?)             // remove organ, optionally run lifecycle  o.get(ei)                        // retrieve organ context  o.has(ei)                        // check existence  o.isAlive(ei)                    // check mounted state  o.all()                           // debug: map of all organs   `
+**Lifecycle Phases:**
 
-**Lifecycle Phases**
+* `willMount`, `didMount`
+* `willUpdate`, `didUpdate`
+* `willUnmount`, `didUnmount`
 
-PhaseTimingwillMountBefore initial DOM renderdidMountAfter initial DOM commitwillUpdateBefore patch/updatedidUpdateAfter patch/updatewillUnmountBefore removal from DOMdidUnmountAfter removal/cleanup
+**Responsibilities:**
 
-**Notes**
+* Assigns unique execution identities (`ei`).
+* Tracks lifecycles and effects.
+* Cleans up resources upon destruction.
 
-*   Effects and reactive subscriptions are tied to organ lifecycle.
-    
-*   Controlled GC: destroy automatically cleans tasks in s.
-    
+---
 
-5\. Executor: e
----------------
+### 4. Executor — `e`
 
-Spatial layer — renders, updates, and removes organs.
+Handles rendering, updating, and unmounting of components.
 
-**API**
+**API:**
 
-Plain text`   e.render(vnode, body)           // mount VNode, returns ei  e.patch(dom, oldVNode, newVNode, ei)  // update existing DOM node  e.unmount(vnode?, ei)           // remove organ from DOM  e.pushEI(ei) / popEI() / currentEI() // internal EI stack tracking   `
+```js
+e.render(vnode, body)
+e.patch(dom, oldVNode, newVNode, ei)
+e.unmount(vnode, ei)
+```
 
-**Rendering Flow**
+**Core Functions:**
 
-1.  render → o.create → willMount → DOM creation → didMount (post-flush via scheduler)
-    
-2.  patch → willUpdate → diff & patch → didUpdate
-    
-3.  unmount → willUnmount → DOM removal → didUnmount
-    
+* `render()` — Creates DOM from virtual nodes.
+* `patch()` — Efficiently updates DOM trees.
+* `unmount()` — Safely removes elements and triggers cleanup.
 
-**Reactive Support**
+**Utilities:**
 
-*   Text nodes can be bound to Actor signals.
-    
-*   Props, attributes, and styles can be reactive via Actor.
-    
+* `pushEI()`, `popEI()`, `currentEI()` for managing execution context.
 
-6\. Reactive Primitives
------------------------
+---
 
-### 6.1 Actor: a()
+### 5. Actor — `a()` and `Actor` class
 
-Encapsulates a reactive value.
+Reactive primitive for state management. Similar to signals or observables.
 
-Plain text`   const count = a(0);  count.get()       // read value (tracks dependency if in reactive context)  count.set(1)      // update value and notify dependents  count.subscribe(fn)  // manual subscription, returns unsubscribe   `
+**Example:**
 
-*   Changes automatically schedule dependent updates via s.
-    
+```js
+const count = a(0);
+count.subscribe(() => console.log(count.get()));
+count.set(1);
+```
 
-### 6.2 Derived Actor: dA()
+**Methods:**
 
-Computed signal derived from one or more actors.
+* `get()` — Returns current value.
+* `set(next)` — Updates value and triggers subscriptions.
+* `subscribe(fn)` — Registers reactive listeners.
 
-Plain text`   const doubled = dA(() => count.get() * 2);   `
+---
 
-*   Tracks Actor.get() calls inside compute.
-    
-*   Auto-updates when dependencies change.
-    
+### 6. Derived Actor — `dA()`
 
-### 6.3 Side Actor: sA()
+Creates computed signals that reactively derive from other actors.
 
-Imperative side-effect with dependency tracking.
+**Example:**
 
-Plain text`   sA(() => {    console.log("Count changed:", count.get());  }, () => [count.get()], explicitEI?);   `
+```js
+const first = a('John');
+const last = a('Doe');
+const fullName = dA(() => `${first.get()} ${last.get()}`);
+```
 
-*   Runs effect immediately.
-    
-*   Automatically re-runs if any dependency changes.
-    
-*   Supports cleanup via returned function.
-    
-*   Lifecycle-aware: tied to organ EI.
-    
+Automatically re-evaluates when dependencies change.
 
-7\. Patch Algorithm
--------------------
+---
 
-*   Supports **keyed children** diffing.
-    
-*   Handles **primitive, Actor, and VNode updates**.
-    
-*   Automatically manages **refs** and reactive **style/attribute updates**.
-    
-*   Excess nodes removed on patch to keep DOM consistent.
-    
+### 7. Side Actor — `sA()`
 
-8\. Notes & Philosophy
-----------------------
+Manages reactive side effects (similar to `useEffect` in React).
 
-*   **Triad Control:** e acts in space, o holds memory, s controls time.
-    
-*   **Intentional Circular Coupling:** Minimal o ↔ s for GC and alive-checks.
-    
-*   **Lifecycle Flexibility:** Default auto-hooks with option for dev override.
-    
-*   **Reactive Continuity:** All Actor subscriptions auto-cleaned on organ destroy.
-    
-*   **Performance-first:** Scheduler batches, keyed diffing, minimal DOM writes.
-    
+**Usage:**
 
-9\. Global Export
------------------
+```js
+sA(() => {
+  console.log('Effect ran');
+  return () => console.log('Cleanup');
+}, () => [someActor]);
+```
 
-Plain text`   const HYP = { h, e, o, s, a, dA, sA };  window.HYP = HYP;  export default HYP;   `
+**Features:**
 
-*   Exposes full triad, hyperscript, and reactivity primitives.
-    
-*   Designed for **modular, lifecycle-aware, reactive UI construction**.
-    
+* Dependency-based re-execution.
+* Automatic cleanup.
+* Tied to component lifecycle.
 
-### ✅ Summary
+---
 
-HYP v0.11.12 provides:
+## Design Pattern — HYP Triad
 
-1.  **Triad Architecture** (e, o, s) — core runtime coordination.
-    
-2.  **Component Factory** h() — functional or DOM-based virtual nodes.
-    
-3.  **Lifecycle Management** — granular control (will/did mount/update/unmount).
-    
-4.  **Reactive System** (a, dA, sA) — fine-grained data-driven updates.
-    
-5.  **Optimized DOM Patching** — keyed, reactive, and minimal writes.
+| Layer      | Name              | Role                                       |
+| ---------- | ----------------- | ------------------------------------------ |
+| Temporal   | **Scheduler (s)** | Queues and executes microtasks efficiently |
+| Structural | **Organiser (o)** | Manages organs, lifecycles, and effects    |
+| Execution  | **Executor (e)**  | Handles rendering, patching, and teardown  |
+
+---
+
+## Example Usage
+
+```js
+import HYP, { h, e, a, dA, sA } from './hyp.js';
+
+function Counter() {
+  const count = a(0);
+  const double = dA(() => count.get() * 2);
+
+  sA(() => {
+    console.log('Mounted');
+    return () => console.log('Unmounted');
+  }, []);
+
+  return h('div', {},
+    h('h1', {}, 'Count: ', count),
+    h('p', {}, 'Double: ', double),
+    h('button', { onClick: () => count.set(count.get() + 1) }, 'Increment')
+  );
+}
+
+e.render(h(Counter), document.body);
+```
+
+---
+
+## Key Features
+
+* **Declarative Virtual DOM** — Hyperscript-based structure for UI creation.
+* **Reactive Core** — Lightweight Actor model for state.
+* **Lifecycle Management** — Fine-grained mount/update/unmount hooks.
+* **Scheduler Optimization** — Microtask-based async task management.
+* **Composable Effects** — Derived and side actors for complex reactivity.
+
+---
+
+## License
+
+Licensed under the **Zero One One License (011sl)** — see [legal/ikdao.org/license/011sl](https://legal/ikdao.org/license/011sl).
