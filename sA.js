@@ -1,37 +1,52 @@
-// Side Act sA() hooks
 
-export const sA = (effect, depsFn = null) => {
-  const eid = currentEID();             // must be called inside organ render/patch
-  const inst = o.get(eid);
-  if (!inst) return;
+// Side Act sA()
+export const sA = (effect, depsFn = null, explicitEI = null) => {
+    const ei = explicitEI ?? e.currentEI(); // fallback to currentEI
+    if (!ei) return;
+    const inst = o.get(ei);
+    if (!inst) return;
 
-  // ensure organ ctx has a hooks map
-  if (!inst.ctx.has('sA-hooks')) inst.ctx.set('sA-hooks', new Map());
-  const hk = inst.ctx.get('sA-hooks');
+    if (!inst.ctx.has('sA-hooks')) inst.ctx.set('sA-hooks', new Map());
+    const hk = inst.ctx.get('sA-hooks');
+    const key = `sA-${hk.size}`;
 
-  // unique key per call (could be improved for multiple calls)
-  const key = `sA-${hk.size}`;
+    const isEqualDeps = (a, b) => {
+        if (!a || !b || a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            if (!Object.is(a[i], b[i])) return false;
+        }
+        return true;
+    };
+    let unsubscribers = [];
+    const run = () => {
+        tr = run;
+        const deps = depsFn ? depsFn() : [];
+        tr = null;
 
-  const run = () => {
-    tracking = run;
-    const deps = depsFn ? depsFn() : [];
-    tracking = null;
+        const prev = hk.get(key);
+        const changed = !prev || !isEqualDeps(deps, prev.deps);
 
-    const prev = hk.get(key);
-    const depsChanged = !prev || deps.some((v, i) => v !== prev.deps[i]);
+        if (changed) {
+            // cleanup previous effect and Actor subscriptions
+            prev?.clear?.();
+            unsubscribers.forEach(u => u());
+            unsubscribers = [];
 
-    if (depsChanged) {
-      // run previous cleanup if any
-      if (prev?.cleanup) prev.cleanup();
+            // run effect
+            const clear = effect();
+            hk.set(key, { deps, clear });
+            if (clear) inst.effects.add({ clear });
 
-      // run effect and store its cleanup
-      const cleanup = effect();
-      hk.set(key, { deps, cleanup });
-
-      // also register cleanup in organ-level effects for auto cleanup
-      if (cleanup) inst.effects.add({ cleanup });
-    }
-  };
-
-  s.add(run, eid);
+            // auto re-run if any Actor deps change
+            for (const d of deps) {
+                if (d instanceof Actor) {
+                    const unsub = d.subscribe(() => s.add(run, ei));
+                    unsubscribers.push(unsub);
+                    if (ei) o.addEffect(ei, unsub);
+                }
+            }
+        }
+    };
+    run();
+    s.add(run, ei);
 };
