@@ -4,9 +4,9 @@
 // https://legal/ikdao.org/license/011sl
 // Hyp UI Framework - [Hemang Tewari]
 
-
 // HYP Organ Factory h()
 // --- 1. Hyperscript h() ---
+
 export const h = (ty, prp, ...chd) => {
     if (prp == null || typeof prp !== "object" || Array.isArray(prp)) {
         chd.unshift(prp);
@@ -238,7 +238,7 @@ export const e = (function () {
         s.add(() => o.runLifecycle(ei, "didUnmount", bodyRef), ei);
 
         o.destroy(ei, { runLifecycle: false });
-        popEI();                      // pop after everything done    
+        popEI();
     }
 
 
@@ -432,7 +432,7 @@ export const dA = (compute) => {
     return sig;
 };
 
-// Side Act sA() (bugs)
+// Side Act sA()
 export const sA = (effect, depsFn = null, explicitEI = null) => {
     const ei = explicitEI ?? e.currentEI(); // fallback to currentEI
     if (!ei) return;
