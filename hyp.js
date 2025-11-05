@@ -8,48 +8,53 @@
 // --- 1. Hyperscript h() ---
 
 export const h = (ty, prp, ...chd) => {
-    if (prp == null || typeof prp !== "object" || Array.isArray(prp)) {
-        chd.unshift(prp);
-        prp = {};
+  // Normalize props & children
+  if (prp == null || typeof prp !== "object" || Array.isArray(prp)) {
+    chd.unshift(prp);
+    prp = {};
+  }
+
+  // 🔁 Iterative (stack-safe) flattening
+  const stack = [...chd];
+  const flatChildren = [];
+
+  while (stack.length > 0) {
+    const item = stack.pop();
+    if (item == null || item === false) continue;
+
+    if (Array.isArray(item)) {
+      // Push in reverse to preserve order
+      for (let i = item.length - 1; i >= 0; i--) {
+        stack.push(item[i]);
+      }
+    } else if (item instanceof Actor) {
+      flatChildren.push(item);
+    } else if (typeof item === "string" || typeof item === "number" || typeof item === "boolean") {
+      flatChildren.push(String(item));
+    } else if (typeof item === "object" && item.ty) {
+      flatChildren.push(item);
+    } else if (typeof item === "function") {
+      flatChildren.push(item());
+    } else {
+      flatChildren.push(String(item));
     }
+  }
 
-    const flatChildren = [];
-    const flatten = (arr) => {
-        for (const c of arr) {
-            if (c == null || c === false) continue;
+  flatChildren.reverse(); // because we popped in reverse
 
-            if (Array.isArray(c)) {
-                flatten(c);
-            }
-            else if (c instanceof Actor) {
-                flatChildren.push(c);
-            }
-            else if (typeof c === "string" || typeof c === "number" || typeof c === "boolean") {
-                flatChildren.push(String(c));
-            }
-            else if (typeof c === "object" && c.ty) {
-                flatChildren.push(c);
-            }
-            else if (typeof c === "function") {
-                flatChildren.push(c());
-            }
-            else {
-                flatChildren.push(String(c));
-            }
-        }
-    };
-    flatten(chd);
+  // Handle component (function as type)
+  if (typeof ty === "function") {
+    return ty({ ...prp, children: flatChildren });
+  }
 
-    if (typeof ty === "function") {
-        return ty({ ...prp, children: flatChildren });
-    }
-    return {
-        ty,
-        prp,
-        chd: flatChildren,
-        key: prp.key ?? null,
-        ref: prp.ref ?? null,
-    };
+  // Handle element
+  return {
+    ty,
+    prp,
+    chd: flatChildren,
+    key: prp.key ?? null,
+    ref: prp.ref ?? null,
+  };
 };
 
 // HYP Triad Architectural Pattern
