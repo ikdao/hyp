@@ -347,71 +347,73 @@ export const e = (function () {
         }
     }
 
-    function patchChildren(dom, oldCh, newCh, ei) {
-        const oldKeyed = new Map();
-        const usedIndices = new Set();
+            function patchChildren(dom, oldCh, newCh, ei) {
+                const oldKeyed = new Map();
+                const usedKeys = new Set();
 
-        oldCh.forEach((c, i) => {
-            if (c && c.key != null) oldKeyed.set(c.key, { vnode: c, index: i });
-        });
+                // Index old children by key (skip non-keyed)
+                oldCh.forEach((c, i) => {
+                    if (c && c.key != null) {
+                        oldKeyed.set(c.key, { vnode: c, dom: dom.childNodes[i], index: i });
+                    }
+                });
 
-        newCh.forEach((nV, newIndex) => {
-            let matched;
-            const oldNode = dom.childNodes[newIndex];
+                const newDoms = [];
 
-            if (nV.key != null) {
-                matched = oldKeyed.get(nV.key);
-                if (matched) {
-                    const childNode = dom.childNodes[matched.index];
-                    patch(childNode, matched.vnode, nV, ei);
-                    usedIndices.add(matched.index);
+                // Process each new child
+                for (let i = 0; i < newCh.length; i++) {
+                    const newV = newCh[i];
+                    let newDom;
 
-                    const refNode = dom.childNodes[newIndex] || null;
-                    if (childNode !== refNode) dom.insertBefore(childNode, refNode);
-                    return;
-                } else {
-                    const el = createDom(nV, ei);
-                    const refNode = dom.childNodes[newIndex] || null;
-                    dom.insertBefore(el, refNode);
-                    return;
+                    if (newV && newV.key != null) {
+                        // Keyed node: try to reuse
+                        const oldEntry = oldKeyed.get(newV.key);
+                        if (oldEntry && oldEntry.dom) {
+                            newDom = patch(oldEntry.dom, oldEntry.vnode, newV, ei);
+                            usedKeys.add(newV.key);
+                        } else {
+                            // Create new
+                            newDom = createDom(newV, ei);
+                        }
+                    } else {
+                        // Non-keyed: patch by index if possible
+                        const oldV = oldCh[i];
+                        const oldDom = dom.childNodes[i];
+                        if (oldDom && oldV != null) {
+                            newDom = patch(oldDom, oldV, newV, ei);
+                        } else if (oldDom) {
+                            // Replace with new content
+                            newDom = createDom(newV, ei);
+                            oldDom.replaceWith(newDom);
+                        } else {
+                            // Append new
+                            newDom = createDom(newV, ei);
+                        }
+                    }
+
+                    newDoms.push(newDom);
+                }
+
+                // Update DOM order to match newDoms
+                for (let i = 0; i < newDoms.length; i++) {
+                    const nextDom = dom.childNodes[i];
+                    if (nextDom !== newDoms[i]) {
+                        dom.insertBefore(newDoms[i], nextDom || null);
+                    }
+                }
+
+                // Remove unused keyed nodes
+                for (const [key, entry] of oldKeyed) {
+                    if (!usedKeys.has(key) && entry.dom) {
+                        entry.dom.remove();
+                    }
+                }
+
+                // Remove extra non-keyed nodes at the end
+                while (dom.childNodes.length > newCh.length) {
+                    dom.lastChild.remove();
                 }
             }
-
-            if (nV instanceof Actor) {
-                if (oldNode && oldCh[newIndex] instanceof Actor) {
-                    // update text node directly
-                    oldNode.data = nV.get();
-                } else {
-                    const newNode = createDom(nV, ei);
-                    if (oldNode) dom.replaceChild(newNode, oldNode);
-                    else dom.appendChild(newNode);
-                }
-                return;
-            }
-
-            // Normal patching for primitives/elements
-            if (oldNode && !usedIndices.has(newIndex)) {
-                patch(oldNode, oldCh[newIndex], nV, ei);
-            } else if (!oldNode) {
-                dom.appendChild(createDom(nV, ei));
-            }
-
-            // update ref if present
-            if (nV.ref) {
-                const currentNode = dom.childNodes[newIndex];
-                if (currentNode) nV.ref(currentNode);
-            }
-        });
-
-        // remove excess old nodes
-        for (let i = oldCh.length - 1; i >= 0; i--) {
-            const oV = oldCh[i];
-            if (!usedIndices.has(i) && (!oV.key || !newCh.find(n => n.key === oV.key))) {
-                const node = dom.childNodes[i];
-                if (node) dom.removeChild(node);
-            }
-        }
-    }
 
     return { render, patch, unmount, pushEI, popEI, currentEI };
 })();
