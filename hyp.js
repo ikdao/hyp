@@ -188,42 +188,64 @@ export const e = (function () {
         return ei;
     }
 
-    function patch(dom, oldVNode, newVNode, ei) {
-        if (!dom || !o.isAlive(ei)) return;
-        pushEI(ei);
-        o.runLifecycle(ei, "willUpdate");
+            function patch(dom, oldVNode, newVNode, ei) {
+                // Guard: invalid DOM or dead instance
+                if (!dom || !o.isAlive(ei)) return dom;
 
-        if (oldVNode.ty !== newVNode.ty || oldVNode.key !== newVNode.key) {
-            const newDom = createDom(newVNode, ei);
-            dom.replaceWith(newDom);
-            s.add(() => o.runLifecycle(ei, "didUpdate"), ei);
-            popEI();
-            return newDom;
-        }
+                if (oldVNode == null) {
+                    const newDom = createDom(newVNode, ei);
+                    dom.replaceWith(newDom);
+                    s.add(() => o.runLifecycle(ei, "didUpdate"), ei);
+                    return newDom;
+                }
 
-        if (oldVNode instanceof Actor && newVNode instanceof Actor) {
-            dom.data = newVNode.get();
-            s.add(() => o.runLifecycle(ei, "didUpdate"), ei);
-            popEI();
-            return dom;
-        }
-        if ((typeof oldVNode === "string" || typeof oldVNode === "number") &&
-            (typeof newVNode === "string" || typeof newVNode === "number")) {
-            const newVal = String(newVNode);
-            if (dom.data !== newVal) dom.data = newVal;
-            s.add(() => o.runLifecycle(ei, "didUpdate"), ei);
-            popEI();
-            return dom;
-        }
-        updateprps(dom, oldVNode.prp || {}, newVNode.prp || {});
-        patchChildren(dom, oldVNode.chd || [], newVNode.chd || [], ei);
+                if (newVNode == null) {
+                    dom.remove();
+                    return null;
+                }
 
-        if (newVNode.ref) newVNode.ref(dom);
-        s.add(() => o.runLifecycle(ei, "didUpdate"), ei);
-        popEI();
+                pushEI(ei);
+                o.runLifecycle(ei, "willUpdate");
 
-        return dom;
-    }
+                // Type or key changed → full replace
+                if (oldVNode.ty !== newVNode.ty || oldVNode.key !== newVNode.key) {
+                    const newDom = createDom(newVNode, ei);
+                    dom.replaceWith(newDom);
+                    s.add(() => o.runLifecycle(ei, "didUpdate"), ei);
+                    popEI();
+                    return newDom;
+                }
+
+                // Handle reactive text nodes (Actor)
+                if (oldVNode instanceof Actor && newVNode instanceof Actor) {
+                    dom.data = newVNode.get();
+                    s.add(() => o.runLifecycle(ei, "didUpdate"), ei);
+                    popEI();
+                    return dom;
+                }
+
+                // Handle primitive text nodes
+                if ((typeof oldVNode === "string" || typeof oldVNode === "number") &&
+                    (typeof newVNode === "string" || typeof newVNode === "number")) {
+                    const newVal = String(newVNode);
+                    if (dom.data !== newVal) dom.data = newVal;
+                    s.add(() => o.runLifecycle(ei, "didUpdate"), ei);
+                    popEI();
+                    return dom;
+                }
+
+                // Update props and children
+                updateprps(dom, oldVNode.prp || {}, newVNode.prp || {});
+                patchChildren(dom, oldVNode.chd || [], newVNode.chd || [], ei);
+
+                // Handle ref
+                if (newVNode.ref) newVNode.ref(dom);
+
+                s.add(() => o.runLifecycle(ei, "didUpdate"), ei);
+                popEI();
+
+                return dom;
+            }
 
     function unmount(vnode = null, ei) {
         const inst = o.get(ei);
