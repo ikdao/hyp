@@ -220,4 +220,4 @@ e.render(h(Counter), document.body);
 
 ## License
 
-Licensed under the **Zero One One License (011sl)** — see [legal/ikdao.org/license/011sl](https://legal/ikdao.org/license/011sl).
+Licensed under the **Zero One One License (011sl)** — see [legal/ikdao.org/license/011sl](https://legal.ikdao.org/license/011sl).
