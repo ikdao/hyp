@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Hello World - HYP UIIX Framework Example</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="preload stylesheet" as="style" id="style" href="https://cdn.jsdelivr.net/gh/ikdao/style@main/style.css">
+
+</head>
+<body>
+  <!-- App Mount Point -->
+  <div id="app"></div>
+
+  <!-- HYP CDN -->
+  <script type="module" src="https://cdn.jsdelivr.net/gh/ikdao/hyp@main/hyp.js"></script>
+
+  <script type="module">
+    const { h, e } = window.HYP;
+
+    // Simple component
+    function HelloWorld() {
+      return h(
+        "div",
+        { style: { fontFamily: "sans-serif", padding: "20px" } },
+        h("h1", {}, "Hello, World 👋"),
+        h("p", {}, "Powered by HYP UIIX Framework 🌈"),
+        h("p", {}, "Built with Ikdao 🩶"),
+        h("p", {}, "Creator Hemang Tewari 🛸👽🚀"),
+      );
+    }
+
+    // Render into #app
+    const mount = document.getElementById("app");
+    e.render(h(HelloWorld), mount);
+  </script>
+</body>
+</html>
