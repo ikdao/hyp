@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>HYP Counter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+ <style>
+    body {
+      font-family: sans-serif;
+      background: #f9f9f9;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .counter {
+      background: #fff;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      text-align: center;
+    }
+    .counter button {
+      margin: 6px;
+      padding: 8px 16px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .counter button:hover {
+      background: #eee;
+    }
+    .footer {
+      margin-top: 16px;
+      font-size: 12px;
+      color: #555;
+    }
+  </style>
+
+</head>
+<body>
+  <div id="app"></div>
+ <script type="module" src="https://cdn.jsdelivr.net/gh/ikdao/hyp@main/hyp.js"></script>
+
+  <script type="module">
+    const { h, e, a, sA } = window.HYP;
+
+   
+   function Counter() {
+      const count = a(0);
+
+       sA(
+        () => {
+          console.log("Count changed:", count.get());
+        },
+        () => [count.get()]
+      );
+
+      return h(
+        "div",
+        { className: "counter" },
+        h("h1", {}, "Counter"),
+        h("p", { style: { fontSize: "24px" } }, "Count: ", count),
+        h(
+          "div",
+          {},
+          h("button", { onClick: () => count.set(count.get() + 1) }, "➕ Increment"),
+          h("button", { onClick: () => count.set(count.get() - 1) }, "➖ Decrement"),
+          h("button", { onClick: () => count.set(0) }, "🔄 Reset")
+        ),
+        h("hr", {}),
+        h("div", { className: "footer" },
+          "Powered by HYP UI Framework 🌈 | Built with Ikdao 🩶 | Creator: Hemang Tewari 🛸👽🚀"
+        )
+      );
+    }
+
+    e.render(h(Counter), document.getElementById("app"));
+
+  </script>
+</body>
+</html>
