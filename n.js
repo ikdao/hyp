@@ -1,8 +1,6 @@
 import { a } from "https://cdn.jsdelivr.net/gh/ikdao/hyp@main/a.js";
 
-/* -------------------------------------------------------
-   Utilities
-------------------------------------------------------- */
+/* ----   Utilities ---------------- */
 
 function parseQuery(search) {
   return Object.fromEntries(new URLSearchParams(search || ""));
@@ -30,9 +28,7 @@ function compileMatcher(pattern) {
   };
 }
 
-/* -------------------------------------------------------
-   Navigator factory (SSR-safe)
-------------------------------------------------------- */
+/*  Navigator factory (SSR-safe) */
 
 export function createNavigator({
   url = null,
@@ -44,23 +40,36 @@ export function createNavigator({
       ? window.location
       : { pathname: "/", search: "" };
 
-  const path = a(initialURL.pathname);
+  /* PATCH 1: path is ALWAYS a string */
+  const path = a(String(initialURL.pathname));
   const query = a(parseQuery(initialURL.search));
   const params = a({});
+const loading = a(false);
+const error = a(null);
 
   const routes = [];
   let beforeEach = null;
 
+  /* PATCH 2: canonical path setter  */
+  function setPath(next) {
+    if (typeof next !== "string") {
+      console.warn("[navigator] path must be string, got:", next);
+      next = String(next);
+    }
+    path.set(next);
+  }
+
   function syncFromLocation() {
     if (typeof window === "undefined") return;
-    path.set(window.location.pathname);
+    setPath(window.location.pathname);
     query.set(parseQuery(window.location.search));
     matchRoutes();
   }
 
   function matchRoutes() {
+    const p = path.get();
     for (const r of routes) {
-      const res = r.match(path.get());
+      const res = r.match(p);
       if (res) {
         params.set(res);
         return r;
@@ -70,11 +79,15 @@ export function createNavigator({
     return null;
   }
 
+
+
   async function navigate(to, replace = false) {
     const from = path.get();
+    const target = String(to);
 
+    /* Guards */
     if (beforeEach) {
-      const result = await beforeEach(to, from);
+      const result = await beforeEach(target, from);
       if (result === false) return;
       if (typeof result === "string") {
         return navigate(result, true);
@@ -82,11 +95,11 @@ export function createNavigator({
     }
 
     if (typeof window !== "undefined" && historyEnabled) {
-      if (replace) history.replaceState(null, "", to);
-      else history.pushState(null, "", to);
+      if (replace) history.replaceState(null, "", target);
+      else history.pushState(null, "", target);
     }
 
-    path.set(to);
+    setPath(target);
     matchRoutes();
   }
 
@@ -95,12 +108,12 @@ export function createNavigator({
   }
 
   return {
-    /* Reactive state */
+    /*  Reactive state */
     path,
     query,
-    params,
+    params, loading, error
 
-    /* Routing table */
+    /*  Routing table  */
     route(pattern, view) {
       routes.push({
         pattern,
@@ -109,7 +122,7 @@ export function createNavigator({
       });
     },
 
-    /* Navigation */
+    /*        Navigation  */
     go(to) {
       return navigate(to, false);
     },
@@ -126,21 +139,16 @@ export function createNavigator({
       if (typeof window !== "undefined") history.forward();
     },
 
-    /* Guards */
+    /*   Guards  */
     beforeEach(fn) {
       beforeEach = fn;
     },
 
-    /* Resolve view */
+    /* - Resolve (pure)  */
     resolve() {
       const r = matchRoutes();
       return r ? r.view : null;
     }
   };
 }
-
-/* -------------------------------------------------------
-   Default singleton (client)
-------------------------------------------------------- */
-
 export const n = createNavigator();
