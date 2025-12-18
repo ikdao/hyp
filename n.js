@@ -1,6 +1,6 @@
 import { a } from "https://cdn.jsdelivr.net/gh/ikdao/hyp@main/a.js";
 
-/* ----   Utilities ---------------- */
+/* ---- Utilities -------------------------------- */
 
 function parseQuery(search) {
   return Object.fromEntries(new URLSearchParams(search || ""));
@@ -28,7 +28,7 @@ function compileMatcher(pattern) {
   };
 }
 
-/*  Navigator factory (SSR-safe) */
+/* ---- Navigator factory (SSR-Support) -------------- */
 
 export function createNavigator({
   url = null,
@@ -40,17 +40,19 @@ export function createNavigator({
       ? window.location
       : { pathname: "/", search: "" };
 
-  /* PATCH 1: path is ALWAYS a string */
+  /* path is ALWAYS a string */
   const path = a(String(initialURL.pathname));
   const query = a(parseQuery(initialURL.search));
   const params = a({});
-const loading = a(false);
-const error = a(null);
+
+  /* async state */
+  const loading = a(false);
+  const error = a(null);
 
   const routes = [];
   let beforeEach = null;
 
-  /* PATCH 2: canonical path setter  */
+  /* canonical path setter */
   function setPath(next) {
     if (typeof next !== "string") {
       console.warn("[navigator] path must be string, got:", next);
@@ -79,8 +81,6 @@ const error = a(null);
     return null;
   }
 
-
-
   async function navigate(to, replace = false) {
     const from = path.get();
     const target = String(to);
@@ -107,13 +107,45 @@ const error = a(null);
     window.addEventListener("popstate", syncFromLocation);
   }
 
+  /* -------- 4: async resolve ---------------- */
+
+  async function resolveAsync() {
+    loading.set(true);
+    error.set(null);
+
+    try {
+      const r = matchRoutes();
+      if (!r) {
+        loading.set(false);
+        return null;
+      }
+
+      let view = r.view;
+
+      // Allow lazy / async route views
+      if (typeof view === "function") {
+        const res = view();
+        view = res instanceof Promise ? await res : res;
+      }
+
+      loading.set(false);
+      return view;
+    } catch (err) {
+      error.set(err);
+      loading.set(false);
+      throw err;
+    }
+  }
+
   return {
-    /*  Reactive state */
+    /* Reactive state */
     path,
     query,
-    params, loading, error
+    params,
+    loading,
+    error,
 
-    /*  Routing table  */
+    /* Routing table */
     route(pattern, view) {
       routes.push({
         pattern,
@@ -122,7 +154,7 @@ const error = a(null);
       });
     },
 
-    /*        Navigation  */
+    /* Navigation */
     go(to) {
       return navigate(to, false);
     },
@@ -139,16 +171,20 @@ const error = a(null);
       if (typeof window !== "undefined") history.forward();
     },
 
-    /*   Guards  */
+    /* Guards */
     beforeEach(fn) {
       beforeEach = fn;
     },
 
-    /* - Resolve (pure)  */
+    /* Sync resolve (unchanged) */
     resolve() {
       const r = matchRoutes();
       return r ? r.view : null;
-    }
+    },
+
+    /* Async resolve (NEW) */
+    resolveAsync
   };
 }
+
 export const n = createNavigator();
