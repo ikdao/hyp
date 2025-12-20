@@ -41,23 +41,6 @@ render, redo organs(vDOM)
 **s (Scheduler)** - Temporal Manager, for attending
 run, clear organs, actors lifecycle 
 
-Hyp States  
-
-Hyp Actors/Reactor/Interactor  
-
-a() 
-actors are active primitive
-
-dA()/r()  
-derived Actor that act in response to act  
-
-sA()/i() 
-side actor that act in relation to act  
-
-n()  
-navigator that match path/query param and route to navigate or for navigating app  
-
-
 Plain text
 `   import { h, e } from "hyp";  const App = () => h("h1", null, "Hello World");  e(h(App), document.getElementById("root"));   `
 
@@ -76,6 +59,20 @@ Necessaries
 -----------
 
 These are the **core reactive orchestration primitives**.
+
+Hyp States - Actors/Reactor/Interactor  
+
+a() 
+actors are active primitive
+
+dA()/r()  
+derived Actor that act in response to act  
+
+sA()/i() 
+side actor that act in relation to act  
+
+n()  
+navigator that match path/query param and route to navigate or for navigating app  
 
 *   const counter = a(0);console.log(counter.get()); // 0counter.set(1);
     
