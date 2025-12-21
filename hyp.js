@@ -669,6 +669,6 @@ export function createNavigator({
 
 export const n = createNavigator();
 
-const HYP = { h, e, o, s, a, r, i };
+const HYP = { h, e, o, s, a, r, i, n };
 window.HYP = HYP;
 export default HYP;
