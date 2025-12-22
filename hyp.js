@@ -478,8 +478,6 @@ export const i = (effect, explicitEI = null) => {
   run();
 };
 
-import { a } from "https://cdn.jsdelivr.net/gh/ikdao/hyp@main/a.js";
-
 /* ---- Utilities -------------------------------- */
 
 function parseQuery(search) {
