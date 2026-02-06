@@ -1,7 +1,7 @@
 Hyp UI Framework(in dev)
 ================
 
-**Hyp** (by [ikdao](https://ikdao.org)) is an **Indie Indic UI/UX/IX Framework** built to experiment with minimal functional UI design patterns, inspired by hyperscript, reactive state, and virtual DOM execution.
+**Hyp** (by [ikdao](https://ikdao.org)) is an **Indie Indic UI/UX/IX Framework** built to experiment with minimal functional UI design patterns, inspired by hyperscript, reactive state, and virtual DOM execution.  
 
 *   **Lightweight**: Pure JS, minimal abstractions.
     
@@ -66,10 +66,9 @@ a()
 actors are active primitive
 
 dA()/r()  
-derived Actor that act in response to act  
-
+derived Actor that act in response to existing act  
 sA()/i() 
-side actor that act in relation to act  
+side actor that act in relation to existing act  
 
 n()  
 navigator that match path/query param and route to navigate or for navigating app  
@@ -87,9 +86,7 @@ Future Possibilities
 The roadmap includes evolving Hyp into a **full SPA framework**:
 
 *   **m()** → custom class modules / extensible components
-    
-*   **n()** → navigator actor for routing
-    
+     
 *   **hX() / eX()** → AR/VR (XR) support
     
 *   **SVG rendering** → already supported in e()
@@ -110,9 +107,7 @@ Support Development
     
 *   **BTC**: bc1qgk84f0dfddqfcww58ftse832udksf2wslnd3cd
     
-*   **SOL**: DQr1t5uSriiwdu1NwTigJdbNg6WVHSFHijmyHFV27VC1
-    
-*   **DOGE**: DLjkz6u5byBzX6Dd68hJVTmxTWeiTZt7em
+*   **SOL**: DQr1t5uSriiwdu1NwTigJdbNg6WVHSFHijmyHFV27VC1  
     
 
 License
