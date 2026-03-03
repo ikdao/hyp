@@ -1,0 +1,31 @@
+{
+  "name": "@ikdao/hyp",
+  "version": "0.1.0",
+  "description": "HYP is an Indic UI/UX framework from ikdao. It uses living Architecture i.e. evolution to reactive UI/UX Frameworks.",
+  "keywords": [
+    "hyp",
+    "hypui",
+    "hypjs",
+    "frontend",
+    "framework",
+    "ui",
+    "ux",
+    "web",
+    "design"
+  ],
+  "homepage": "https://github.com/ikdao/hyp#readme",
+  "bugs": {
+    "url": "https://github.com/ikdao/hyp/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ikdao/hyp.git"
+  },
+  "license": "01SL",
+  "author": "Hemang Tewari",
+  "type": "ESM",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
