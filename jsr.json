@@ -2,6 +2,7 @@
   "name": "@ikdao/hyp",
   "version": "0.1.0",
   "exports": "./mod.js",
+  "license": "01SL",
   "publish": {
     "include": [
       "README.md",
