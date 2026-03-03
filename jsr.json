@@ -1,0 +1,13 @@
+{
+  "name": "@ikdao/hyp",
+  "version": "0.1.0",
+  "exports": "./mod.js",
+  "publish": {
+    "include": [
+      "README.md",
+      "LICENSE",
+      "mod.js",
+      "src/*.js"
+    ]
+  }
+}
