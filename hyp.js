@@ -459,6 +459,8 @@ export const e = (function () {
 
 // HYP Actors Act Stack to track actor state
 
+const actStack = [];
+
 function pushAct(fn) {
   actStack.push(fn);
 }
