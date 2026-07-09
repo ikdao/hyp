@@ -481,7 +481,7 @@ export class Actor {
   }
   get() {
     const act = currentAct();
-    if (act) this.subs.add(tr);
+    if (act) this.subs.add(act);
 
     return this.value;
   }
