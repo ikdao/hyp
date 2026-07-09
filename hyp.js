@@ -455,18 +455,18 @@ export const e = (function () {
 })();
 
 // Active/Reactive/Interactive Parts
-// Hyp Neccesaries
+// Hyp Neccesaries make hyp active and alive
 
-// HYP Actors State
+// HYP Actors Act Stack to track actor state
 
-function pushState(fn) {
-  trackerStack.push(fn);
+function pushAct(fn) {
+  actStack.push(fn);
 }
-function popState() {
-  trackerStack.pop();
+function popAct() {
+  actStack.pop();
 }
-function currentState() {
-  return trackerStack[trackerStack.length - 1] || null;
+function currentAct() {
+  return actStack[actStack.length - 1] || null;
 }
 
 
@@ -478,8 +478,8 @@ export class Actor {
     this.subs = new Set();
   }
   get() {
-    const tr = currentState();
-    if (tr) this.subs.add(tr);
+    const act = currentAct();
+    if (act) this.subs.add(tr);
 
     return this.value;
   }
@@ -496,12 +496,13 @@ export class Actor {
 export const a = (initial) => new Actor(initial);
 
 // Reactor r()/Derived Act dA()
+// Derivative act that compute over actor 
 export const r = (compute) => {
   const sig = a();
   const recompute = () => {
-    pushState(recompute);
+    pushAct(recompute);
     const val = compute();
-    popState();
+    popAct();
     sig.set(val);
   };
   recompute();
@@ -509,6 +510,7 @@ export const r = (compute) => {
 };
 
 // Interactor i()/Side Act sA()
+// Interactive actor that cause effect
 export const i = (effect, explicitEI = null) => {
   const ei = explicitEI ?? e.currentEI();
   if (!ei) return;
@@ -517,14 +519,13 @@ export const i = (effect, explicitEI = null) => {
     if (cleanup) {
       try { cleanup(); } catch (err) { console.error("i() cleanup error:", err); }
     }
-    pushState(run);
+    pushAct(run);
     cleanup = effect();
-    popState();
+    popAct();
     if (cleanup) o.addEffect(ei, cleanup);
   };
   run();
 };
-
 
 // HYP navigator Module, n()
 // Navigator is a special actor that match path/param to navigate through app 
