@@ -253,9 +253,8 @@ export const e = (function () {
     }
 
     // Update props and children
-    updateprps(dom, oldVNode.prp || {}, newVNode.prp || {});
+    updateprps(dom, oldVNode.prp || {}, newVNode.prp || {}, ei);
     patchChildren(dom, oldVNode.chd || [], newVNode.chd || [], ei);
-
     // Handle ref
     if (newVNode.ref) newVNode.ref(dom);
 
@@ -361,27 +360,51 @@ export const e = (function () {
     return el;
   }
 
-  function updateprps(dom, oldprps, newprps) {
+  function updateprps(dom, oldprps, newprps, ei) {
+    // 1. Clean up removed properties
     for (const k in oldprps) {
       if (!(k in newprps)) {
-        if (k.startsWith("on") && typeof oldprps[k] === "function")
+        if (k.startsWith("on") && typeof oldprps[k] === "function") {
           dom.removeEventListener(k.slice(2).toLowerCase(), oldprps[k]);
-        else
+        } else if (k in dom) {
+          // Safely reset DOM properties (e.g., false for booleans, "" for strings)
+          dom[k] = typeof oldprps[k] === "boolean" ? false : "";
+        } else {
           dom.removeAttribute(k);
+        }
       }
     }
 
+    // 2. Apply new or changed properties
     for (const [k, v] of Object.entries(newprps)) {
       if (oldprps[k] !== v) {
         if (k.startsWith("on") && typeof v === "function") {
           if (oldprps[k]) dom.removeEventListener(k.slice(2).toLowerCase(), oldprps[k]);
           dom.addEventListener(k.slice(2).toLowerCase(), v);
-        } else {
-          dom.setAttribute(k, v);
+        } 
+        else if (v instanceof Actor) {
+          // Handle reactive Actor props (matches createDom logic)
+          const updateAttr = () => {
+            const next = v.get();
+            if (k in dom) dom[k] = next;
+            else dom.setAttribute(k, next);
+          };
+          updateAttr();
+          const unsub = v.subscribe(updateAttr);
+          if (ei) o.addEffect(ei, unsub);
+        } 
+        else {
+          // Standard property/attribute assignment
+          if (k in dom) {
+            dom[k] = v;
+          } else {
+            dom.setAttribute(k, v);
+          }
         }
       }
     }
   }
+
 
   function patchChildren(dom, oldCh, newCh, ei) {
     const oldKeyed = new Map();
@@ -458,7 +481,6 @@ export const e = (function () {
 // Hyp Neccesaries make hyp active and alive
 
 // HYP Actors Act Stack to track actor state
-
 const actStack = [];
 
 function pushAct(fn) {
@@ -481,8 +503,10 @@ export class Actor {
   }
   get() {
     const act = currentAct();
-    if (act) this.subs.add(act);
-
+    if (act) {
+      this.subs.add(act);
+      if (act.deps) act.deps.add(this); // Track this dependency
+    }
     return this.value;
   }
   set(next) {
@@ -502,6 +526,11 @@ export const a = (initial) => new Actor(initial);
 export const r = (compute) => {
   const sig = a();
   const recompute = () => {
+    if (recompute.deps) {
+      recompute.deps.forEach(dep => dep.subs.delete(recompute));
+    }
+    recompute.deps = new Set();
+        
     pushAct(recompute);
     const val = compute();
     popAct();
@@ -528,6 +557,7 @@ export const i = (effect, explicitEI = null) => {
   };
   run();
 };
+
 
 // HYP navigator Module, n()
 // Navigator is a special actor that match path/param to navigate through app 
